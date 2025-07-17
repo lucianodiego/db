@@ -10,6 +10,7 @@ from datetime import datetime
 import csv
 import io
 import sys
+import re # Importato per la gestione delle date
 
 # --- Configurazione Iniziale ---
 app = Flask(__name__)
@@ -19,6 +20,20 @@ app.secret_key = os.environ.get('SECRET_KEY', 'un-segreto-molto-segreto-per-svil
 
 DEFAULT_RESULTS_PER_PAGE = 20
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+# --- Funzioni Helper e Filtri Jinja ---
+
+def format_display_date(date_str):
+    """
+    Filtro per Jinja2: mostra 'Disponibile*' se la data contiene lettere.
+    """
+    if any(c.isalpha() for c in str(date_str)):
+        return "Disponibile*"
+    return date_str
+
+# Registra il filtro personalizzato per l'uso nei template
+app.jinja_env.filters['format_date'] = format_display_date
+
 
 # --- Funzioni di Connessione e Query per PostgreSQL ---
 def get_db_connection():
@@ -145,7 +160,7 @@ def upload_csv():
                 dialect = csv.Sniffer().sniff(stream.read(2048))
                 stream.seek(0)
             except csv.Error:
-                dialect = 'excel'
+                dialect = 'excel' # Fallback
                 dialect.delimiter = ';'
                 stream.seek(0)
 
@@ -163,15 +178,12 @@ def upload_csv():
             if records_to_insert:
                 conn = get_db_connection()
                 with conn.cursor() as cur:
-                    # Svuota la tabella prima di un nuovo caricamento massivo
                     cur.execute("TRUNCATE TABLE persone RESTART IDENTITY;")
                     
-                    # Inserisce i nuovi dati
                     execute_values(cur, 
                         "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
                         records_to_insert)
                     
-                    # Aggiorna la data dell'ultimo caricamento
                     now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
                     cur.execute("""
                         INSERT INTO metadata (key, value) VALUES ('last_update', %s)
@@ -212,7 +224,6 @@ def index():
 
     total_record_count = get_total_record_count()
     
-    # Recupera la data di ultimo aggiornamento dal database
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=DictCursor) as cur:
@@ -220,6 +231,23 @@ def index():
             record = cur.fetchone()
             last_update_date = record['value'] if record else "N/D"
         conn.close()
+    except psycopg2.errors.UndefinedTable:
+        last_update_date = "N/D (DB non inizializzato)"
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                CREATE TABLE metadata (
+                    key VARCHAR(50) PRIMARY KEY,
+                    value VARCHAR(255)
+                );
+                """)
+                cur.execute("INSERT INTO metadata (key, value) VALUES ('last_update', 'Nessun caricamento eseguito');")
+            conn.commit()
+            conn.close()
+            last_update_date = 'Nessun caricamento eseguito'
+        except Exception:
+            pass
     except Exception:
         last_update_date = "N/D"
 
@@ -309,23 +337,35 @@ def index():
 
     if is_search_active and not validation_error and where_clauses:
         sql_where_string = " AND ".join(where_clauses)
+        
+        # LOGICA EFFICIENTE: 1. Conteggio
         count_query = f"SELECT COUNT(*) FROM persone WHERE {sql_where_string}"
         total_results = count_query_db(count_query, tuple(query_params))
-        total_pages = math.ceil(total_results / per_page)
+        total_pages = math.ceil(total_results / per_page) if total_results > 0 else 0
+
+        # LOGICA EFFICIENTE: 2. Ordinamento
+        sort_by_col = search_params['sort_by']
+        sort_order = 'DESC' if search_params['sort_order'] == 'desc' else 'ASC'
+        
+        order_by_clause = ""
+        if sort_by_col == 'data_nascita':
+            order_by_clause = f"""ORDER BY
+                CASE WHEN data_nascita ~ '^[0-9]{{4}}$' THEN to_date(data_nascita, 'YYYY')
+                     WHEN data_nascita ~ '^[0-9]{{1,2}}/[0-9]{{1,2}}/[0-9]{{4}}$' THEN to_date(data_nascita, 'DD/MM/YYYY')
+                     ELSE NULL END {sort_order} NULLS LAST
+            """
+        else:
+            order_by_clause = f"ORDER BY {sort_by_col} {sort_order} NULLS LAST"
+
+        # LOGICA EFFICIENTE: 3. Paginazione
         offset = (page - 1) * per_page
+        data_query = f"SELECT * FROM persone WHERE {sql_where_string} {order_by_clause} LIMIT %s OFFSET %s"
+        final_params = tuple(query_params) + (per_page, offset)
+        risultati = query_db(data_query, final_params)
         
         start_result = min(offset + 1, total_results)
         end_result = min(offset + per_page, total_results)
 
-        sort_by_col = search_params['sort_by']
-        sort_order = search_params['sort_order'].upper()
-        if sort_by_col not in ['cognome', 'nome', 'data_nascita'] or sort_order not in ['ASC', 'DESC']:
-            sort_by_col, sort_order = 'cognome', 'ASC'
-        order_by_clause = f"ORDER BY {sort_by_col} {sort_order}"
-
-        data_query = f"SELECT * FROM persone WHERE {sql_where_string} {order_by_clause} LIMIT %s OFFSET %s"
-        final_params = tuple(query_params) + (per_page, offset)
-        risultati = query_db(data_query, final_params)
 
     return render_template(
         "index.html",

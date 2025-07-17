@@ -8,7 +8,7 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0; background-color: #f4f4f9; color: #333; }
         .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1, h2, h3 { color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
-        .info-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; flex-wrap: wrap; }
+        .info-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; flex-wrap: wrap; gap: 15px; }
         .alphabet-bar { margin: 20px 0; padding: 10px; background-color: #ecf0f1; border-radius: 5px; text-align: center; }
         .alphabet-bar a { margin: 0 5px; text-decoration: none; color: #3498db; font-weight: bold; }
         .alphabet-bar a.active { color: #e74c3c; text-decoration: underline; }
@@ -27,6 +27,7 @@
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
         th { background-color: #f2f2f2; }
+        th a { text-decoration: none; color: inherit; }
         .pagination { display: flex; justify-content: center; align-items: center; gap: 5px; margin-top: 20px; flex-wrap: wrap; }
         .pagination a, .pagination span { padding: 8px 12px; border: 1px solid #ddd; text-decoration: none; color: #3498db; }
         .pagination .active { background-color: #3498db; color: white; border-color: #3498db; }
@@ -37,6 +38,7 @@
         .flash-warning { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
         .flash-info { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
         .upload-section { background-color: #f8f9fa; }
+        .results-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
     </style>
 </head>
 <body>
@@ -57,15 +59,6 @@
                 </ul>
             {% endif %}
         {% endwith %}
-
-        <!-- Barra dell'alfabeto -->
-        <div class="alphabet-bar">
-            {% for letter in alphabet %}
-                <a href="{{ url_for('index', letter=letter) }}" class="{% if search_params.letter == letter %}active{% endif %}">{{ letter }}</a>
-            {% endfor %}
-            <a href="{{ url_for('index') }}" style="margin-left: 15px; color: #c0392b;">Azzera</a>
-        </div>
-
 
         <!-- Form di Ricerca -->
         <form method="post">
@@ -140,17 +133,57 @@
 
         <!-- Risultati della Ricerca -->
         {% if is_search_active %}
-            <div class="results-info">
-                Trovati <strong>{{ total_results }}</strong> risultati. Visualizzati da {{ start_result }} a {{ end_result }}.
+            <!-- Barra dell'alfabeto (mostrata solo dopo una ricerca) -->
+            <div class="alphabet-bar">
+                {% for letter in alphabet %}
+                    <a href="{{ url_for('index', **search_params, letter=letter, page=1) }}" class="{% if search_params.letter == letter %}active{% endif %}">{{ letter }}</a>
+                {% endfor %}
+                <a href="{{ url_for('index', **search_params, letter='', page=1) }}" style="margin-left: 15px; color: #c0392b;">Azzera Lettera</a>
             </div>
+
+            <div class="results-header">
+                <div class="results-info">
+                    Trovati <strong>{{ total_results }}</strong> risultati. 
+                    {% if risultati %}
+                        Visualizzati da {{ start_result }} a {{ end_result }}.
+                    {% endif %}
+                </div>
+                <!-- Menu a tendina per risultati per pagina -->
+                <form method="get" class="per-page-form">
+                    {% for key, value in search_params.items() %}
+                        {% if key != 'per_page' and key != 'page' %}
+                            <input type="hidden" name="{{ key }}" value="{{ value }}">
+                        {% endif %}
+                    {% endfor %}
+                    <label for="per_page">Risultati per pagina:</label>
+                    <select name="per_page" id="per_page" onchange="this.form.submit()">
+                        <option value="10" {% if search_params.per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="20" {% if search_params.per_page == 20 %}selected{% endif %}>20</option>
+                        <option value="50" {% if search_params.per_page == 50 %}selected{% endif %}>50</option>
+                    </select>
+                </form>
+            </div>
+
             {% if risultati %}
                 <table>
                     <thead>
                         <tr>
-                            <th>Cognome</th>
-                            <th>Nome</th>
+                            <th>
+                                <a href="{{ url_for('index', **search_params, sort_by='cognome', sort_order='asc' if search_params.sort_by != 'cognome' or search_params.sort_order == 'desc' else 'desc') }}">
+                                    Cognome {% if search_params.sort_by == 'cognome' %}{{ '▲' if search_params.sort_order == 'asc' else '▼' }}{% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="{{ url_for('index', **search_params, sort_by='nome', sort_order='asc' if search_params.sort_by != 'nome' or search_params.sort_order == 'desc' else 'desc') }}">
+                                    Nome {% if search_params.sort_by == 'nome' %}{{ '▲' if search_params.sort_order == 'asc' else '▼' }}{% endif %}
+                                </a>
+                            </th>
                             <th>Luogo di Nascita</th>
-                            <th>Data di Nascita</th>
+                            <th>
+                                <a href="{{ url_for('index', **search_params, sort_by='data_nascita', sort_order='asc' if search_params.sort_by != 'data_nascita' or search_params.sort_order == 'desc' else 'desc') }}">
+                                    Data di Nascita {% if search_params.sort_by == 'data_nascita' %}{{ '▲' if search_params.sort_order == 'asc' else '▼' }}{% endif %}
+                                </a>
+                            </th>
                             <th>Padre</th>
                             <th>Madre</th>
                         </tr>
@@ -160,8 +193,8 @@
                         <tr>
                             <td>{{ persona.cognome }}</td>
                             <td>{{ persona.nome }}</td>
-                            <td>{{ persona.luogo_nascita }}</td>
-                            <td>{{ persona.data_nascita }}</td>
+                            <td>Disponibile*</td>
+                            <td>{{ persona.data_nascita | format_date }}</td>
                             <td>{{ persona.nome_padre }}</td>
                             <td>{{ persona.nome_madre }}</td>
                         </tr>
@@ -172,6 +205,7 @@
                 <!-- Paginazione -->
                 {% if total_pages > 1 %}
                 <div class="pagination">
+                    <span>Pagina {{ page }} di {{ total_pages }}</span>
                     {% if page > 1 %}
                         <a href="{{ url_for('index', page=page-1, **search_params) }}">&laquo; Precedente</a>
                     {% endif %}
@@ -179,7 +213,7 @@
                     {% for p in range(1, total_pages + 1) %}
                         {% if p == page %}
                             <span class="active">{{ p }}</span>
-                        {% elif p - page < 5 and p - page > -5 %}
+                        {% elif p - page < 3 and p - page > -3 %}
                             <a href="{{ url_for('index', page=p, **search_params) }}">{{ p }}</a>
                         {% elif p == 1 or p == total_pages %}
                              <a href="{{ url_for('index', page=p, **search_params) }}">{{ p }}</a>
