@@ -3,202 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ricerca Anagrafica</title>
+    <title>DataBase - Radici Genealogia</title>
+    <!-- Utilizzo Tailwind CSS per uno stile rapido e pulito -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0; background-color: #f4f4f9; color: #333; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1, h2, h3 { color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
-        .info-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; flex-wrap: wrap; }
-        .alphabet-bar { margin: 20px 0; padding: 10px; background-color: #ecf0f1; border-radius: 5px; text-align: center; }
-        .alphabet-bar a { margin: 0 5px; text-decoration: none; color: #3498db; font-weight: bold; }
-        .alphabet-bar a.active { color: #e74c3c; text-decoration: underline; }
-        form, .results-info, .upload-section { margin-bottom: 20px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        .form-group { display: flex; flex-direction: column; }
-        .form-group label { font-weight: bold; margin-bottom: 5px; }
-        .form-group input[type="text"], .form-group input[type="number"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; width: 100%; box-sizing: border-box; }
-        .radio-group { display: flex; gap: 15px; margin-top: 10px; }
-        .radio-group label { font-weight: normal; }
-        .button-group { grid-column: 1 / -1; display: flex; justify-content: flex-start; gap: 10px; margin-top: 20px; }
-        button { padding: 10px 20px; border: none; border-radius: 4px; background-color: #3498db; color: white; font-size: 1rem; cursor: pointer; transition: background-color 0.3s; }
-        button:hover { background-color: #2980b9; }
-        button.secondary { background-color: #95a5a6; }
-        button.secondary:hover { background-color: #7f8c8d; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .pagination { display: flex; justify-content: center; align-items: center; gap: 5px; margin-top: 20px; flex-wrap: wrap; }
-        .pagination a, .pagination span { padding: 8px 12px; border: 1px solid #ddd; text-decoration: none; color: #3498db; }
-        .pagination .active { background-color: #3498db; color: white; border-color: #3498db; }
-        .flash-messages { list-style: none; padding: 0; margin-bottom: 20px; }
-        .flash-messages li { padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid; }
-        .flash-success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .flash-danger { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .flash-warning { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
-        .flash-info { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
-        .upload-section { background-color: #f8f9fa; }
+        body { font-family: 'Inter', sans-serif; }
+        .pagination a, .pagination span, .alphabox a { display: inline-flex; align-items: center; justify-content: center; padding: 8px; margin: 2px; border-radius: 8px; transition: background-color 0.3s, color 0.3s; border: 1px solid #e5e7eb; }
+        .pagination a, .alphabox a { background-color: #f9fafb; color: #1f2937; text-decoration: none; min-width: 36px; }
+        .pagination a:hover, .alphabox a:hover { background-color: #f3f4f6; }
+        .pagination .active, .alphabox .active { background-color: #3b82f6; color: white; font-weight: bold; border-color: #3b82f6; }
+        .pagination .disabled { color: #9ca3af; pointer-events: none; background-color: #f9fafb; }
+        .no-select { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+        th a { color: inherit; text-decoration: none; }
+        th a:hover { text-decoration: underline; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>Ricerca Anagrafica</h1>
-        <div class="info-bar">
-            <span>Record totali nel database: <strong>{{ total_record_count }}</strong></span>
-            <span>Ultimo aggiornamento: <strong>{{ last_update_date }}</strong></span>
-        </div>
+<body class="bg-gray-100 text-gray-800 no-select">
 
-        <!-- Sezione per mostrare i messaggi flash -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flash-messages">
-                {% for category, message in messages %}
-                    <li class="flash-{{ category }}">{{ message }}</li>
-                {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %}
+    <div class="container mx-auto p-4 md:p-8">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-7xl mx-auto">
+            <h1 class="text-3xl font-bold mb-2 text-center text-gray-700">DataBase - Radici Genealogia</h1>
+            
+            <p class="text-center text-sm text-gray-500 mb-8">
+                Totale persone registrate: <strong>{{ total_record_count }}</strong> (aggiornato al {{ last_update_date }})
+            </p>
 
-        <!-- Barra dell'alfabeto -->
-        <div class="alphabet-bar">
-            {% for letter in alphabet %}
-                <a href="{{ url_for('index', letter=letter) }}" class="{% if search_params.letter == letter %}active{% endif %}">{{ letter }}</a>
-            {% endfor %}
-            <a href="{{ url_for('index') }}" style="margin-left: 15px; color: #c0392b;">Azzera</a>
-        </div>
-
-
-        <!-- Form di Ricerca -->
-        <form method="post">
-            <h3>Filtri di Ricerca</h3>
-            <div class="form-grid">
-                <!-- Cognome -->
-                <div class="form-group">
-                    <label for="cognome_testo">Cognome</label>
-                    <input type="text" name="cognome_testo" id="cognome_testo" value="{{ search_params.cognome_testo }}">
-                    <div class="radio-group">
-                        <label><input type="radio" name="cognome_tipo" value="inizia" {% if search_params.cognome_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
-                        <label><input type="radio" name="cognome_tipo" value="contiene" {% if search_params.cognome_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
-                        <label><input type="radio" name="cognome_tipo" value="esatto" {% if search_params.cognome_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
-                    </div>
-                </div>
-                <!-- Nome -->
-                <div class="form-group">
-                    <label for="nome_testo">Nome</label>
-                    <input type="text" name="nome_testo" id="nome_testo" value="{{ search_params.nome_testo }}">
-                    <div class="radio-group">
-                        <label><input type="radio" name="nome_tipo" value="inizia" {% if search_params.nome_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
-                        <label><input type="radio" name="nome_tipo" value="contiene" {% if search_params.nome_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
-                        <label><input type="radio" name="nome_tipo" value="esatto" {% if search_params.nome_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
-                    </div>
-                </div>
-                <!-- Anno di Nascita -->
-                <div class="form-group">
-                    <label for="data_nascita_anno">Anno di Nascita</label>
-                    <input type="number" name="data_nascita_anno" id="data_nascita_anno" value="{{ search_params.data_nascita_anno }}" placeholder="Es: 1990">
-                     <div class="radio-group">
-                        <label><input type="radio" name="data_nascita_tipo" value="anno_esatto" {% if search_params.data_nascita_tipo == 'anno_esatto' %}checked{% endif %}> Esatto</label>
-                        <label><input type="radio" name="data_nascita_tipo" value="pm_1" {% if search_params.data_nascita_tipo == 'pm_1' %}checked{% endif %}> +/- 1 anno</label>
-                        <label><input type="radio" name="data_nascita_tipo" value="pm_5" {% if search_params.data_nascita_tipo == 'pm_5' %}checked{% endif %}> +/- 5 anni</label>
-                    </div>
-                </div>
-                <!-- Nome del Padre -->
-                 <div class="form-group">
-                    <label for="nome_padre_testo">Nome del Padre</label>
-                    <input type="text" name="nome_padre_testo" id="nome_padre_testo" value="{{ search_params.nome_padre_testo }}">
-                    <div class="radio-group">
-                        <label><input type="radio" name="nome_padre_tipo" value="inizia" {% if search_params.nome_padre_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
-                        <label><input type="radio" name="nome_padre_tipo" value="contiene" {% if search_params.nome_padre_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
-                        <label><input type="radio" name="nome_padre_tipo" value="esatto" {% if search_params.nome_padre_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
-                    </div>
-                </div>
-                <!-- Nome della Madre -->
-                <div class="form-group">
-                    <label for="nome_madre_testo">Nome della Madre</label>
-                    <input type="text" name="nome_madre_testo" id="nome_madre_testo" value="{{ search_params.nome_madre_testo }}">
-                    <div class="radio-group">
-                        <label><input type="radio" name="nome_madre_tipo" value="inizia" {% if search_params.nome_madre_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
-                        <label><input type="radio" name="nome_madre_tipo" value="contiene" {% if search_params.nome_madre_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
-                        <label><input type="radio" name="nome_madre_tipo" value="esatto" {% if search_params.nome_madre_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
-                    </div>
-                </div>
-            </div>
-            <div class="button-group">
-                <button type="submit">Cerca</button>
-                <button type="button" onclick="window.location.href='/'" class="secondary">Azzera Ricerca</button>
-            </div>
-        </form>
-
-        <!-- Sezione per l'upload del CSV -->
-        <div class="upload-section">
-            <h3>Carica nuovi dati da file CSV</h3>
-            <form action="{{ url_for('upload_csv') }}" method="post" enctype="multipart/form-data">
-                <p>Il caricamento di un nuovo file <strong>sostituirà tutti i dati esistenti</strong>.</p>
-                <input type="file" name="csv_file" accept=".csv" required>
-                <button type="submit">Carica e Sostituisci Dati</button>
-            </form>
-        </div>
-
-        <!-- Risultati della Ricerca -->
-        {% if is_search_active %}
-            <div class="results-info">
-                Trovati <strong>{{ total_results }}</strong> risultati. Visualizzati da {{ start_result }} a {{ end_result }}.
-            </div>
-            {% if risultati %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Cognome</th>
-                            <th>Nome</th>
-                            <th>Luogo di Nascita</th>
-                            <th>Data di Nascita</th>
-                            <th>Padre</th>
-                            <th>Madre</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for persona in risultati %}
-                        <tr>
-                            <td>{{ persona.cognome }}</td>
-                            <td>{{ persona.nome }}</td>
-                            <td>{{ persona.luogo_nascita }}</td>
-                            <td>{{ persona.data_nascita }}</td>
-                            <td>{{ persona.nome_padre }}</td>
-                            <td>{{ persona.nome_madre }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <!-- Modulo di Ricerca Multi-Campo -->
+            <form method="POST" action="/" class="mb-8 space-y-6">
                 
-                <!-- Paginazione -->
-                {% if total_pages > 1 %}
-                <div class="pagination">
-                    {% if page > 1 %}
-                        <a href="{{ url_for('index', page=page-1, **search_params) }}">&laquo; Precedente</a>
-                    {% endif %}
-
-                    {% for p in range(1, total_pages + 1) %}
-                        {% if p == page %}
-                            <span class="active">{{ p }}</span>
-                        {% elif p - page < 5 and p - page > -5 %}
-                            <a href="{{ url_for('index', page=p, **search_params) }}">{{ p }}</a>
-                        {% elif p == 1 or p == total_pages %}
-                             <a href="{{ url_for('index', page=p, **search_params) }}">{{ p }}</a>
-                        {% elif p == 2 or p == total_pages -1 %}
-                            <span>...</span>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if page < total_pages %}
-                        <a href="{{ url_for('index', page=page+1, **search_params) }}">Successivo &raquo;</a>
-                    {% endif %}
-                </div>
+                {% if validation_error %}
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative" role="alert">
+                        <strong class="font-bold">Errore:</strong>
+                        <span class="block sm:inline">{{ validation_error }}</span>
+                    </div>
                 {% endif %}
 
-            {% else %}
-                <p>Nessun risultato trovato per la tua ricerca.</p>
-            {% endif %}
-        {% endif %}
+                <p class="text-sm text-gray-500">
+                    Inserisci almeno 3 caratteri nei campi di testo o un anno di 4 cifre.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8 border border-gray-200 p-6 rounded-lg">
+                    
+                    <!-- Campo Cognome -->
+                    <div class="space-y-2">
+                        <label for="cognome_testo" class="block text-sm font-medium text-gray-600">Cognome</label>
+                        <input type="text" name="cognome_testo" id="cognome_testo" value="{{ search_params.cognome_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="cognome_inizia" name="cognome_tipo" value="inizia" {% if search_params.cognome_tipo == 'inizia' or not search_params.cognome_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="cognome_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="cognome_esatto" name="cognome_tipo" value="esatto" {% if search_params.cognome_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="cognome_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="cognome_contiene" name="cognome_tipo" value="contiene" {% if search_params.cognome_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="cognome_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
 
+                    <!-- Campo Nome -->
+                    <div class="space-y-2">
+                        <label for="nome_testo" class="block text-sm font-medium text-gray-600">Nome</label>
+                        <input type="text" name="nome_testo" id="nome_testo" value="{{ search_params.nome_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="nome_inizia" name="nome_tipo" value="inizia" {% if search_params.nome_tipo == 'inizia' or not search_params.nome_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="nome_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="nome_esatto" name="nome_tipo" value="esatto" {% if search_params.nome_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="nome_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="nome_contiene" name="nome_tipo" value="contiene" {% if search_params.nome_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="nome_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
+
+                    <!-- Anno di Nascita -->
+                    <div class="space-y-2">
+                        <label for="data_nascita_anno" class="block text-sm font-medium text-gray-600">Anno di Nascita</label>
+                        <input type="text" name="data_nascita_anno" id="data_nascita_anno" value="{{ search_params.data_nascita_anno or '' }}" pattern="\d{4}" title="Inserisci un anno di 4 cifre" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                             <div class="flex items-center"><input type="radio" id="anno_esatto" name="data_nascita_tipo" value="anno_esatto" {% if search_params.data_nascita_tipo == 'anno_esatto' or not search_params.data_nascita_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="anno_esatto" class="ml-2 text-sm">Esatto</label></div>
+                             <div class="flex items-center"><input type="radio" id="pm_1" name="data_nascita_tipo" value="pm_1" {% if search_params.data_nascita_tipo == 'pm_1' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="pm_1" class="ml-2 text-sm">+/- 1</label></div>
+                             <div class="flex items-center"><input type="radio" id="pm_5" name="data_nascita_tipo" value="pm_5" {% if search_params.data_nascita_tipo == 'pm_5' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="pm_5" class="ml-2 text-sm">+/- 5</label></div>
+                        </fieldset>
+                    </div>
+
+                    <!-- Campo Nome Padre -->
+                    <div class="space-y-2">
+                        <label for="nome_padre_testo" class="block text-sm font-medium text-gray-600">Nome del Padre</label>
+                        <input type="text" name="nome_padre_testo" id="nome_padre_testo" value="{{ search_params.nome_padre_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="padre_inizia" name="nome_padre_tipo" value="inizia" {% if search_params.nome_padre_tipo == 'inizia' or not search_params.nome_padre_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="padre_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="padre_esatto" name="nome_padre_tipo" value="esatto" {% if search_params.nome_padre_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="padre_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="padre_contiene" name="nome_padre_tipo" value="contiene" {% if search_params.nome_padre_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="padre_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
+
+                    <!-- Campo Nome Madre -->
+                    <div class="space-y-2">
+                        <label for="nome_madre_testo" class="block text-sm font-medium text-gray-600">Nome della Madre</label>
+                        <input type="text" name="nome_madre_testo" id="nome_madre_testo" value="{{ search_params.nome_madre_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="madre_inizia" name="nome_madre_tipo" value="inizia" {% if search_params.nome_madre_tipo == 'inizia' or not search_params.nome_madre_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="madre_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="madre_esatto" name="nome_madre_tipo" value="esatto" {% if search_params.nome_madre_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="madre_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="madre_contiene" name="nome_madre_tipo" value="contiene" {% if search_params.nome_madre_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="madre_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
+                </div>
+
+                <div class="space-y-1 pt-4">
+                    <p class="text-xs text-gray-500">* "Disponibile" per Luogo di Nascita significa che è conosciuto il luogo o è accessibile e quindi da verificare;</p>
+                    <p class="text-xs text-gray-500">* "NN NN" può indicare che il dato è semplicemente Non Noto, mentre in alcuni casi si tratta di "Esposti"/"Orfani di genitore/i".</p>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300">
+                    Cerca
+                </button>
+            </form>
+
+            <!-- Alphabox appare solo se c'è stata una ricerca -->
+            {% if is_search_active and not validation_error and total_results > 0 %}
+            <div class="alphabox mb-8 text-center p-4 border-t border-b border-gray-200">
+                <p class="text-sm font-semibold text-gray-600 mb-3">Filtra i risultati per iniziale del cognome:</p>
+                <div class="flex flex-wrap justify-center gap-1">
+                    {% for letter in alphabet %}
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, letter=letter) }}" class="px-2 py-1 {{ 'active' if search_params.letter == letter else '' }}">{{ letter }}</a>
+                    {% endfor %}
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page) }}" class="px-3 py-1">Tutti</a>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Riepilogo Risultati -->
+            {% if is_search_active and not validation_error %}
+                <div class="text-center text-gray-600 mb-6 p-3">
+                    {% if total_results > 0 %}
+                        Trovati <strong>{{ total_results }}</strong> risultati.
+                    {% else %}
+                        Nessun risultato trovato per la tua ricerca.
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {% if risultati %}
+                <div class="overflow-x-auto border border-gray-200 rounded-lg" oncontextmenu="return false;">
+                    <table class="w-full table-auto bg-white">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                {% macro sort_link(column, title) %}
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, letter=search_params.letter, sort_by=column, sort_order='desc' if search_params.sort_by == column and search_params.sort_order == 'asc' else 'asc') }}" class="flex items-center">
+                                            {{ title }}
+                                            <span class="inline-block w-4 ml-1 text-center">
+                                                {% if search_params.sort_by == column %}{{ '▲' if search_params.sort_order == 'asc' else '▼' }}{% endif %}
+                                            </span>
+                                        </a>
+                                    </th>
+                                {% endmacro %}
+                                
+                                {{ sort_link('cognome', 'Cognome') }}
+                                {{ sort_link('nome', 'Nome') }}
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Luogo Nascita</th>
+                                {{ sort_link('data_nascita', 'Data Nascita') }}
+                                {{ sort_link('nome_padre', 'Padre') }}
+                                {{ sort_link('nome_madre', 'Madre') }}
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for persona in risultati %}
+                            <tr class="hover:bg-gray-50 transition-colors duration-200">
+                                <td class="px-6 py-4 text-sm text-gray-800 break-words">{{ persona.cognome }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-800 break-words">{{ persona.nome }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">Disponibile*</td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">
+                                    {% if persona.data_nascita and (persona.data_nascita | string).replace('/', '').isdigit() %}
+                                        {{ persona.data_nascita }}
+                                    {% else %}
+                                        Disponibile*
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">
+                                    {% if persona.nome_padre == 'NN NN' %} NN NN*
+                                    {% elif persona.nome_padre == 'part.i' or persona.nome_padre == 'part.e' %} Disponibile*
+                                    {% else %} {{ persona.nome_padre }} {% endif %}
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">
+                                    {% if persona.nome_madre == 'NN NN' %} NN NN*
+                                    {% elif persona.nome_madre == 'part.i' or persona.nome_madre == 'part.e' %} Disponibile*
+                                    {% else %} {{ persona.nome_madre }} {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginazione e Selettore Risultati -->
+                {% if total_results > 0 %}
+                <div class="mt-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-600 border-t pt-4 space-y-4 md:space-y-0">
+                    <div class="flex items-center space-x-2">
+                        <span class="font-semibold">Risultati per pagina:</span>
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, sort_by=search_params.sort_by, sort_order=search_params.sort_order, per_page=10, page=1) }}" class="px-3 py-1 rounded-md transition {{ 'bg-blue-600 text-white shadow' if search_params.per_page == 10 else 'bg-gray-200 hover:bg-gray-300' }}">10</a>
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, sort_by=search_params.sort_by, sort_order=search_params.sort_order, per_page=20, page=1) }}" class="px-3 py-1 rounded-md transition {{ 'bg-blue-600 text-white shadow' if search_params.per_page == 20 else 'bg-gray-200 hover:bg-gray-300' }}">20</a>
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, sort_by=search_params.sort_by, sort_order=search_params.sort_order, per_page=50, page=1) }}" class="px-3 py-1 rounded-md transition {{ 'bg-blue-600 text-white shadow' if search_params.per_page == 50 else 'bg-gray-200 hover:bg-gray-300' }}">50</a>
+                    </div>
+                    <div>
+                        <p>Pagina <strong>{{ page }}</strong> di <strong>{{ total_pages }}</strong> | Risultati {{ start_result }} - {{ end_result }} di {{ total_results }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% if total_pages > 1 %}
+                <nav class="pagination flex items-center justify-center flex-wrap mt-4" aria-label="Paginazione">
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=1) }}" class="{{ 'disabled' if page == 1 else '' }}">Inizio</a>
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=page-1) }}" class="{{ 'disabled' if page == 1 else '' }}">&laquo; Prec</a>
+                    {% set window = 2 %}
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == 1 or p == total_pages or (p >= page - window and p <= page + window) %}
+                            {% if loop.previtem is defined and p > loop.previtem + 1 %}
+                                <span class="disabled">...</span>
+                            {% endif %}
+                            <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+                        {% endif %}
+                    {% endfor %}
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=page+1) }}" class="{{ 'disabled' if page == total_pages else '' }}">Succ &raquo;</a>
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=total_pages) }}" class="{{ 'disabled' if page == total_pages else '' }}">Fine</a>
+                </nav>
+                {% endif %}
+            {% endif %}
+        </div>
     </div>
+
 </body>
 </html>
