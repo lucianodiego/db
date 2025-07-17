@@ -9,6 +9,7 @@ from flask import Flask, request, render_template, flash, redirect, url_for
 from datetime import datetime
 import csv
 import io
+import sys # Importato per gestire il limite del campo CSV
 
 # --- Configurazione Iniziale ---
 app = Flask(__name__)
@@ -61,23 +62,31 @@ def get_total_record_count():
 @app.route('/setup-database-online-super-segreto-12345')
 def setup_online_db():
     """
-    Questa rotta crea la tabella e la popola con dati di esempio.
-    Può essere eseguita più volte: aggiungerà solo i dati non ancora presenti.
+    Questa rotta crea e aggiorna la tabella, e la popola con dati di esempio.
+    Può essere eseguita più volte in sicurezza.
     """
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
+            # Crea la tabella se non esiste, con colonne più grandi (VARCHAR 255)
             cur.execute("""
             CREATE TABLE IF NOT EXISTS persone (
                 id SERIAL PRIMARY KEY,
-                cognome VARCHAR(100),
-                nome VARCHAR(100),
-                luogo_nascita VARCHAR(100),
+                cognome VARCHAR(255),
+                nome VARCHAR(255),
+                luogo_nascita VARCHAR(255),
                 data_nascita VARCHAR(20),
-                nome_padre VARCHAR(100),
-                nome_madre VARCHAR(100)
+                nome_padre VARCHAR(255),
+                nome_madre VARCHAR(255)
             );
             """)
+
+            # CORREZIONE: Aggiorna la struttura delle colonne della tabella esistente
+            cur.execute("ALTER TABLE persone ALTER COLUMN cognome TYPE VARCHAR(255);")
+            cur.execute("ALTER TABLE persone ALTER COLUMN nome TYPE VARCHAR(255);")
+            cur.execute("ALTER TABLE persone ALTER COLUMN luogo_nascita TYPE VARCHAR(255);")
+            cur.execute("ALTER TABLE persone ALTER COLUMN nome_padre TYPE VARCHAR(255);")
+            cur.execute("ALTER TABLE persone ALTER COLUMN nome_madre TYPE VARCHAR(255);")
             
             persone_da_inserire = [
                 ('Rossi', 'Mario', 'Roma', '1990', 'Giuseppe', 'Maria'),
@@ -105,10 +114,11 @@ def setup_online_db():
         conn.commit()
         conn.close()
         
+        msg = f"Setup completato! La struttura del database è aggiornata. "
         if inserted_count > 0:
-            msg = f"Setup completato! Aggiunti {inserted_count} nuovi record."
+            msg += f"Aggiunti {inserted_count} nuovi record."
         else:
-            msg = "Setup non necessario. Nessun nuovo dato da aggiungere."
+            msg += "Nessun nuovo dato da aggiungere."
 
         return f"<h1>{msg}</h1>"
     except Exception as e:
@@ -152,15 +162,16 @@ def upload_csv():
         return redirect(url_for('index'))
         
     if file and file.filename.endswith('.csv'):
-        # CORREZIONE: Legge il file in byte e prova diverse codifiche
+        # CORREZIONE: Aumenta il limite della dimensione del campo per gestire celle molto grandi
+        # Il default è 131072 (128KB). Lo portiamo a 512KB.
+        csv.field_size_limit(512 * 1024)
+
         file_bytes = file.stream.read()
         decoded_content = None
         try:
-            # Prova prima con UTF-8, la codifica standard
             decoded_content = file_bytes.decode('utf-8')
         except UnicodeDecodeError:
             try:
-                # Se fallisce, prova con latin-1, comune in Europa/Italia
                 decoded_content = file_bytes.decode('latin-1')
                 flash('File decodificato con la codifica alternativa (latin-1).', 'info')
             except UnicodeDecodeError:
@@ -326,7 +337,6 @@ def index():
             sort_by_col, sort_order = 'cognome', 'ASC'
         order_by_clause = f"ORDER BY {sort_by_col} {sort_order}"
 
-        # Qui c'era l'errore. Questa è la riga corretta.
         data_query = f"SELECT * FROM persone WHERE {sql_where_string} {order_by_clause} LIMIT %s OFFSET %s"
         final_params = tuple(query_params) + (per_page, offset)
         risultati = query_db(data_query, final_params)
