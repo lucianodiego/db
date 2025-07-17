@@ -105,10 +105,27 @@ def setup_online_db():
 # --- ROTTA DI DEBUG (invariata) ---
 @app.route('/debug-db')
 def debug_db():
-    # ... (codice invariato)
-    pass
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT * FROM persone LIMIT 10;")
+            records = cur.fetchall()
+        conn.close()
 
-# --- ROTTA PER CARICARE IL CSV (OTTIMIZZATA) ---
+        if not records:
+            return "<h3>Diagnosi Database:</h3><p>La tabella 'persone' esiste ma è VUOTA.</p>"
+
+        response_html = "<h3>Diagnosi Database:</h3><ul>"
+        for record in records:
+            response_html += f"<li>{dict(record)}</li>"
+        response_html += "</ul>"
+        return response_html
+
+    except Exception as e:
+        return f"<h1>Errore durante la diagnosi!</h1><p>{e}</p>"
+
+
+# --- ROTTA PER CARICARE IL CSV (OTTIMIZZATA E PIÙ ROBUSTA) ---
 @app.route('/upload', methods=['POST'])
 def upload_csv():
     """Gestisce l'upload di un file CSV con un metodo di inserimento massivo (bulk insert)."""
@@ -137,16 +154,27 @@ def upload_csv():
                 return redirect(url_for('index'))
 
         try:
-            stream = io.StringIO(decoded_content, newline=None)
-            csv_reader = csv.reader(stream)
+            stream = io.StringIO(decoded_content)
             
-            # Prepara una lista per contenere tutti i record validi
+            # NUOVA LOGICA: Rileva automaticamente il delimitatore (virgola o punto e virgola)
+            # Legge un campione del file per determinare il formato
+            try:
+                dialect = csv.Sniffer().sniff(stream.read(2048))
+                stream.seek(0)  # Torna all'inizio del file dopo aver "annusato"
+            except csv.Error:
+                # Se lo sniffer fallisce (es. file con una sola colonna), usa il punto e virgola di default
+                dialect = 'excel' # 'excel' usa la virgola, ma lo sovrascriviamo
+                dialect.delimiter = ';'
+                stream.seek(0)
+
+            # Usa il "dialetto" rilevato per leggere il file correttamente
+            csv_reader = csv.reader(stream, dialect)
+            
             records_to_insert = []
             skipped_count = 0
             for row in csv_reader:
                 if not row: continue 
                 if len(row) == 6:
-                    # Aggiunge la riga alla lista per l'inserimento massivo
                     records_to_insert.append(tuple(field.strip() for field in row))
                 else:
                     skipped_count += 1
@@ -154,7 +182,6 @@ def upload_csv():
             if records_to_insert:
                 conn = get_db_connection()
                 with conn.cursor() as cur:
-                    # Esegue un singolo comando per inserire tutti i record. È molto più veloce.
                     execute_values(cur, 
                         "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
                         records_to_insert)
@@ -162,7 +189,7 @@ def upload_csv():
                 conn.close()
                 flash(f'Caricamento completato! Record inseriti: {len(records_to_insert)}. Righe saltate (malformate): {skipped_count}.', 'success')
             else:
-                flash('Nessun record valido trovato nel file CSV.', 'warning')
+                flash(f'Nessun record valido trovato nel file CSV. Controlla che il file non sia vuoto e che le righe abbiano 6 colonne separate da virgola o punto e virgola. Righe saltate: {skipped_count}.', 'warning')
 
         except Exception as e:
             flash(f'Errore critico durante l\'elaborazione del file CSV: {e}', 'danger')
