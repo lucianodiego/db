@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ricerca Anagrafica</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #2c3e50; }
+        form, .results-info, .upload-section { margin-bottom: 20px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .form-group { display: flex; flex-direction: column; }
+        label { font-weight: bold; margin-bottom: 5px; }
+        input[type="text"], input[type="number"], select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        .button-group { grid-column: 1 / -1; display: flex; justify-content: flex-start; gap: 10px; }
+        button { padding: 10px 20px; border: none; border-radius: 4px; background-color: #3498db; color: white; font-size: 1rem; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #2980b9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 20px; }
+        .pagination a, .pagination span { padding: 8px 12px; border: 1px solid #ddd; text-decoration: none; color: #3498db; }
+        .pagination .active { background-color: #3498db; color: white; border-color: #3498db; }
+        .flash-messages { list-style: none; padding: 0; margin-bottom: 20px; }
+        .flash-messages li { padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid; }
+        .flash-success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .flash-danger { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        .flash-warning { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
+        .upload-section { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Ricerca Anagrafica</h1>
+        <p>Record totali nel database: <strong>{{ total_record_count }}</strong></p>
+
+        <!-- Sezione per mostrare i messaggi flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flash-messages">
+                {% for category, message in messages %}
+                    <li class="flash-{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Form di Ricerca -->
+        <form method="post">
+            <div class="form-grid">
+                <!-- Cognome -->
+                <div class="form-group">
+                    <label for="cognome_testo">Cognome</label>
+                    <input type="text" name="cognome_testo" id="cognome_testo" value="{{ search_params.cognome_testo }}">
+                    <select name="cognome_tipo">
+                        <option value="inizia" {% if search_params.cognome_tipo == 'inizia' %}selected{% endif %}>Inizia con</option>
+                        <option value="contiene" {% if search_params.cognome_tipo == 'contiene' %}selected{% endif %}>Contiene</option>
+                        <option value="esatto" {% if search_params.cognome_tipo == 'esatto' %}selected{% endif %}>Esatto</option>
+                    </select>
+                </div>
+                <!-- Altri campi di ricerca... -->
+            </div>
+            <div class="button-group">
+                <button type="submit">Cerca</button>
+            </div>
+        </form>
+
+        <!-- Nuova sezione per l'upload del CSV -->
+        <div class="upload-section">
+            <h3>Carica nuovi dati da file CSV</h3>
+            <form action="{{ url_for('upload_csv') }}" method="post" enctype="multipart/form-data">
+                <p>Il file CSV deve avere 6 colonne, senza intestazione, in questo ordine: <br><code>cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre</code></p>
+                <input type="file" name="csv_file" accept=".csv" required>
+                <button type="submit">Carica File</button>
+            </form>
+        </div>
+
+        <!-- Risultati della Ricerca -->
+        {% if is_search_active %}
+            <div class="results-info">
+                Trovati <strong>{{ total_results }}</strong> risultati.
+            </div>
+            {% if risultati %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cognome</th>
+                            <th>Nome</th>
+                            <th>Luogo di Nascita</th>
+                            <th>Data di Nascita</th>
+                            <th>Padre</th>
+                            <th>Madre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for persona in risultati %}
+                        <tr>
+                            <td>{{ persona.cognome }}</td>
+                            <td>{{ persona.nome }}</td>
+                            <td>{{ persona.luogo_nascita }}</td>
+                            <td>{{ persona.data_nascita }}</td>
+                            <td>{{ persona.nome_padre }}</td>
+                            <td>{{ persona.nome_madre }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        {% endif %}
+
+    </div>
+</body>
+</html>
