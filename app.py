@@ -1,388 +1,75 @@
-# -*- coding: utf-8 -*-
+C:\Users\Diego\Downloads\cerca_persone\cerca_persone>git push -u origin master
+Enumerating objects: 2, done.
+Counting objects: 100% (2/2), done.
+Delta compression using up to 4 threads
+Compressing objects: 100% (2/2), done.
+Writing objects: 100% (2/2), 386 bytes | 128.00 KiB/s, done.
+Total 2 (delta 1), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (1/1), done.
+To https://github.com/lucianodiego/db.git
+   efad735..4795fd5  master -> master
+branch 'master' set up to track 'origin/master'.
 
-# Import delle librerie necessarie
-import os
-import psycopg2 # Libreria per connettersi a PostgreSQL
-from psycopg2.extras import DictCursor, execute_values
-import math
-from flask import Flask, request, render_template, flash, redirect, url_for
-from datetime import datetime
-import csv
-import io
-import sys
-import re # Importato per la gestione delle date
+C:\Users\Diego\Downloads\cerca_persone\cerca_persone>git add .
+warning: in the working copy of 'app.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/index.html', LF will be replaced by CRLF the next time Git touches it
 
-# --- Configurazione Iniziale ---
-app = Flask(__name__)
-app.jinja_env.add_extension('jinja2.ext.do') 
-app.secret_key = os.environ.get('SECRET_KEY', 'un-segreto-molto-segreto-per-sviluppo-locale')
+C:\Users\Diego\Downloads\cerca_persone\cerca_persone>git commit -m "Feat: ripristina paginazione, ordinamento e layout"
+[master d545a88] Feat: ripristina paginazione, ordinamento e layout
+ 2 files changed, 106 insertions(+), 32 deletions(-)
 
+C:\Users\Diego\Downloads\cerca_persone\cerca_persone>git push -u origin master
+To https://github.com/lucianodiego/db.git
+ ! [rejected]        master -> master (fetch first)
+error: failed to push some refs to 'https://github.com/lucianodiego/db.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 
-DEFAULT_RESULTS_PER_PAGE = 20
-ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+C:\Users\Diego\Downloads\cerca_persone\cerca_persone>git pull origin master
+remote: Enumerating objects: 11, done.
+remote: Counting objects: 100% (11/11), done.
+remote: Compressing objects: 100% (6/6), done.
+remote: Total 7 (delta 3), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (7/7), 6.25 KiB | 25.00 KiB/s, done.
+From https://github.com/lucianodiego/db
+ * branch            master     -> FETCH_HEAD
+   4795fd5..9204152  master     -> origin/master
+Auto-merging app.py
+CONFLICT (content): Merge conflict in app.py
+Auto-merging templates/index.html
+CONFLICT (content): Merge conflict in templates/index.html
+Automatic merge failed; fix conflicts and then commit the result.
 
-# --- Funzioni Helper e Filtri Jinja ---
+C:\Users\Diego\Downloads\cerca_persone\cerca_persone>git add .git commit -m "Feat: paginazione efficiente e ripristino UI"git push -u origin master
+error: unknown switch `m'
+usage: git add [<options>] [--] <pathspec>...
 
-def format_display_date(date_str):
-    """
-    Filtro per Jinja2: mostra 'Disponibile*' se la data contiene lettere.
-    """
-    if any(c.isalpha() for c in str(date_str)):
-        return "Disponibile*"
-    return date_str
+    -n, --[no-]dry-run    dry run
+    -v, --[no-]verbose    be verbose
 
-# Registra il filtro personalizzato per l'uso nei template
-app.jinja_env.filters['format_date'] = format_display_date
-
-
-# --- Funzioni di Connessione e Query per PostgreSQL ---
-def get_db_connection():
-    """Crea una connessione al database PostgreSQL su Render."""
-    conn_url = os.environ.get('DATABASE_URL')
-    if not conn_url:
-        raise RuntimeError("DATABASE_URL non è impostata. Assicurati di averla aggiunta su Render.")
-    
-    conn = psycopg2.connect(conn_url)
-    return conn
-
-def query_db(query, params=()):
-    """Esegue una query di selezione su PostgreSQL e restituisce tutti i risultati."""
-    conn = get_db_connection()
-    with conn.cursor(cursor_factory=DictCursor) as cursor:
-        cursor.execute(query, params)
-        results = cursor.fetchall()
-    conn.close()
-    return results
-
-def count_query_db(query, params=()):
-    """Esegue una query di conteggio su PostgreSQL."""
-    conn = get_db_connection()
-    with conn.cursor() as cursor:
-        cursor.execute(query, params)
-        count = cursor.fetchone()[0]
-    conn.close()
-    return count
-
-def get_total_record_count():
-    """Restituisce il numero totale di record nella tabella persone."""
-    try:
-        count = count_query_db("SELECT COUNT(*) FROM persone")
-    except psycopg2.Error:
-        count = 0
-    return count
-
-# --- ROTTA DI SETUP ---
-@app.route('/setup-database-online-super-segreto-12345')
-def setup_online_db():
-    """
-    Questa rotta SVUOTA la tabella e la ripopola con i dati di esempio.
-    """
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("DROP TABLE IF EXISTS persone;")
-            cur.execute("DROP TABLE IF EXISTS metadata;") # Svuota anche i metadati
-            
-            # Ricrea la tabella persone
-            cur.execute("""
-            CREATE TABLE persone (
-                id SERIAL PRIMARY KEY,
-                cognome VARCHAR(255),
-                nome VARCHAR(255),
-                luogo_nascita VARCHAR(255),
-                data_nascita VARCHAR(20),
-                nome_padre VARCHAR(255),
-                nome_madre VARCHAR(255)
-            );
-            """)
-
-            # Ricrea la tabella metadata per la data di aggiornamento
-            cur.execute("""
-            CREATE TABLE metadata (
-                key VARCHAR(50) PRIMARY KEY,
-                value VARCHAR(255)
-            );
-            """)
-            cur.execute("INSERT INTO metadata (key, value) VALUES ('last_update', 'Nessun caricamento eseguito');")
-            
-            persone_da_inserire = [
-                ('Rossi', 'Mario', 'Roma', '1990', 'Giuseppe', 'Maria'),
-                ('Bianchi', 'Luigi', 'Milano', '1988', 'Antonio', 'Anna'),
-                ('Verdi', 'Giulia', 'Napoli', '1992', 'Francesco', 'Laura'),
-                ('Russo', 'Paolo', 'Torino', '1990', 'Salvatore', 'Angela'),
-            ]
-            
-            execute_values(cur, 
-                "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
-                persone_da_inserire)
-
-        conn.commit()
-        conn.close()
-        
-        msg = "Setup completato! Il database è stato resettato e ripopolato con i dati di base."
-        return f"<h1>{msg}</h1>"
-    except Exception as e:
-        return f"<h1>Errore durante il setup!</h1><p>{e}</p>"
+    -i, --[no-]interactive
+                          interactive picking
+    -p, --[no-]patch      select hunks interactively
+    -e, --[no-]edit       edit current diff and apply
+    -f, --[no-]force      allow adding otherwise ignored files
+    -u, --[no-]update     update tracked files
+    --[no-]renormalize    renormalize EOL of tracked files (implies -u)
+    -N, --[no-]intent-to-add
+                          record only the fact that the path will be added later
+    -A, --[no-]all        add changes from all tracked and untracked files
+    --[no-]ignore-removal ignore paths removed in the working tree (same as --no-all)
+    --[no-]refresh        don't add, only refresh the index
+    --[no-]ignore-errors  just skip files which cannot be added because of errors
+    --[no-]ignore-missing check if - even missing - files are ignored in dry run
+    --[no-]sparse         allow updating entries outside of the sparse-checkout cone
+    --[no-]chmod (+|-)x   override the executable bit of the listed files
+    --[no-]pathspec-from-file <file>
+                          read pathspec from file
+    --[no-]pathspec-file-nul
+                          with --pathspec-from-file, pathspec elements are separated with NUL character
 
 
-# --- ROTTA PER CARICARE IL CSV ---
-@app.route('/upload', methods=['POST'])
-def upload_csv():
-    """Gestisce l'upload di un file CSV con un metodo di inserimento massivo (bulk insert)."""
-    if 'csv_file' not in request.files:
-        flash('Nessun file selezionato nel form.', 'warning')
-        return redirect(url_for('index'))
-    
-    file = request.files['csv_file']
-    
-    if file.filename == '':
-        flash('Nessun file selezionato.', 'warning')
-        return redirect(url_for('index'))
-        
-    if file and file.filename.endswith('.csv'):
-        csv.field_size_limit(512 * 1024)
-
-        file_bytes = file.stream.read()
-        decoded_content = None
-        try:
-            decoded_content = file_bytes.decode('utf-8')
-        except UnicodeDecodeError:
-            try:
-                decoded_content = file_bytes.decode('latin-1')
-            except UnicodeDecodeError:
-                flash("Impossibile decodificare il file. Prova a salvarlo con codifica UTF-8.", 'danger')
-                return redirect(url_for('index'))
-
-        try:
-            stream = io.StringIO(decoded_content)
-            
-            try:
-                dialect = csv.Sniffer().sniff(stream.read(2048))
-                stream.seek(0)
-            except csv.Error:
-                dialect = 'excel' # Fallback
-                dialect.delimiter = ';'
-                stream.seek(0)
-
-            csv_reader = csv.reader(stream, dialect)
-            
-            records_to_insert = []
-            skipped_count = 0
-            for row in csv_reader:
-                if not row: continue 
-                if len(row) == 6:
-                    records_to_insert.append(tuple(field.strip() for field in row))
-                else:
-                    skipped_count += 1
-            
-            if records_to_insert:
-                conn = get_db_connection()
-                with conn.cursor() as cur:
-                    cur.execute("TRUNCATE TABLE persone RESTART IDENTITY;")
-                    
-                    execute_values(cur, 
-                        "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
-                        records_to_insert)
-                    
-                    now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-                    cur.execute("""
-                        INSERT INTO metadata (key, value) VALUES ('last_update', %s)
-                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-                    """, (now_str,))
-
-                conn.commit()
-                conn.close()
-                flash(f'Caricamento completato! Inseriti {len(records_to_insert)} nuovi record. Righe saltate: {skipped_count}.', 'success')
-            else:
-                flash(f'Nessun record valido trovato nel file CSV. Controlla che il file non sia vuoto e che le righe abbiano 6 colonne. Righe saltate: {skipped_count}.', 'warning')
-
-        except Exception as e:
-            flash(f'Errore critico durante l\'elaborazione del file CSV: {e}', 'danger')
-        
-        return redirect(url_for('index'))
-
-    else:
-        flash('Formato file non valido. Si prega di caricare un file .csv.', 'danger')
-        return redirect(url_for('index'))
-
-
-# --- ROTTA PRINCIPALE DELL'APPLICAZIONE ---
-@app.route("/", methods=["GET", "POST"])
-def index():
-    per_page = request.args.get("per_page", DEFAULT_RESULTS_PER_PAGE, type=int)
-    if per_page not in [10, 20, 50]:
-        per_page = DEFAULT_RESULTS_PER_PAGE
-
-    page = request.args.get("page", 1, type=int)
-    risultati = []
-    total_pages = 0
-    total_results = 0
-    validation_error = None
-    start_result = 0
-    end_result = 0
-    is_search_active = False
-
-    total_record_count = get_total_record_count()
-    
-    try:
-        conn = get_db_connection()
-        with conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute("SELECT value FROM metadata WHERE key = 'last_update'")
-            record = cur.fetchone()
-            last_update_date = record['value'] if record else "N/D"
-        conn.close()
-    except psycopg2.errors.UndefinedTable:
-        last_update_date = "N/D (DB non inizializzato)"
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur:
-                cur.execute("""
-                CREATE TABLE metadata (
-                    key VARCHAR(50) PRIMARY KEY,
-                    value VARCHAR(255)
-                );
-                """)
-                cur.execute("INSERT INTO metadata (key, value) VALUES ('last_update', 'Nessun caricamento eseguito');")
-            conn.commit()
-            conn.close()
-            last_update_date = 'Nessun caricamento eseguito'
-        except Exception:
-            pass
-    except Exception:
-        last_update_date = "N/D"
-
-
-    search_params = {
-        'cognome_testo': '', 'cognome_tipo': 'inizia',
-        'nome_testo': '', 'nome_tipo': 'inizia',
-        'data_nascita_anno': '', 'data_nascita_tipo': 'anno_esatto',
-        'nome_padre_testo': '', 'nome_padre_tipo': 'inizia',
-        'nome_madre_testo': '', 'nome_madre_tipo': 'inizia',
-        'sort_by': 'cognome',
-        'sort_order': 'asc',
-        'per_page': per_page,
-        'letter': ''
-    }
-
-    request_source = request.form if request.method == 'POST' else request.args
-    for key in search_params:
-        if key in request_source:
-            if key == 'per_page':
-                search_params[key] = int(request_source[key])
-            else:
-                search_params[key] = request_source[key]
-
-    if request.method == 'POST':
-        page = 1
-        search_params['letter'] = ''
-    
-    if request.args.get('letter'):
-        page = 1
-
-    where_clauses = []
-    query_params = []
-    
-    field_map = {
-        'cognome': ('cognome_testo', 'cognome_tipo'), 'nome': ('nome_testo', 'nome_tipo'),
-        'nome_padre': ('nome_padre_testo', 'nome_padre_tipo'), 'nome_madre': ('nome_madre_testo', 'nome_madre_tipo'),
-    }
-    active_fields = {}
-    for db_col, (testo_key, _) in field_map.items():
-        testo = search_params.get(testo_key, '').strip()
-        if testo: active_fields[db_col] = testo
-    
-    anno_nascita = search_params.get('data_nascita_anno', '').strip()
-    if anno_nascita: active_fields['data_nascita'] = anno_nascita
-
-    is_search_active = bool(active_fields) or bool(search_params.get('letter'))
-
-    if is_search_active:
-        invalid_fields = []
-        for label, text in active_fields.items():
-            if label != 'data_nascita' and len(text) < 3: invalid_fields.append(label)
-        if 'data_nascita' in active_fields and not (len(active_fields['data_nascita']) == 4 and active_fields['data_nascita'].isdigit()):
-            invalid_fields.append('data_nascita')
-
-        if invalid_fields:
-            field_labels = {'cognome': 'Cognome', 'nome': 'Nome', 'data_nascita': 'Anno di Nascita (deve essere di 4 cifre)', 'nome_padre': 'Nome del Padre', 'nome_madre': 'Nome della Madre'}
-            invalid_labels = [field_labels[key] for key in invalid_fields]
-            validation_error = f"I seguenti campi non sono validi: {', '.join(invalid_labels)}."
-        else:
-            for db_col, testo in active_fields.items():
-                if db_col == 'data_nascita': continue
-                _, tipo_key = field_map[db_col]
-                tipo = search_params.get(tipo_key, 'inizia')
-                if tipo == "esatto": filtro = testo
-                elif tipo == "inizia": filtro = f"{testo}%"
-                else: filtro = f"%{testo}%"
-                where_clauses.append(f"{db_col} ILIKE %s")
-                query_params.append(filtro)
-
-            if 'data_nascita' in active_fields:
-                anno = int(active_fields['data_nascita'])
-                tipo_anno = search_params.get('data_nascita_tipo', 'anno_esatto')
-                if tipo_anno == 'anno_esatto':
-                    where_clauses.append("data_nascita = %s")
-                    query_params.append(str(anno))
-                elif tipo_anno == 'pm_1':
-                    where_clauses.append("CAST(data_nascita AS INTEGER) BETWEEN %s AND %s")
-                    query_params.extend([anno - 1, anno + 1])
-                elif tipo_anno == 'pm_5':
-                    where_clauses.append("CAST(data_nascita AS INTEGER) BETWEEN %s AND %s")
-                    query_params.extend([anno - 5, anno + 5])
-            
-            if search_params['letter']:
-                where_clauses.append("cognome ILIKE %s")
-                query_params.append(f"{search_params['letter']}%")
-
-    if is_search_active and not validation_error and where_clauses:
-        sql_where_string = " AND ".join(where_clauses)
-        
-        # LOGICA EFFICIENTE: 1. Conteggio
-        count_query = f"SELECT COUNT(*) FROM persone WHERE {sql_where_string}"
-        total_results = count_query_db(count_query, tuple(query_params))
-        total_pages = math.ceil(total_results / per_page) if total_results > 0 else 0
-
-        # LOGICA EFFICIENTE: 2. Ordinamento
-        sort_by_col = search_params['sort_by']
-        sort_order = 'DESC' if search_params['sort_order'] == 'desc' else 'ASC'
-        
-        order_by_clause = ""
-        if sort_by_col == 'data_nascita':
-            order_by_clause = f"""ORDER BY
-                CASE WHEN data_nascita ~ '^[0-9]{{4}}$' THEN to_date(data_nascita, 'YYYY')
-                     WHEN data_nascita ~ '^[0-9]{{1,2}}/[0-9]{{1,2}}/[0-9]{{4}}$' THEN to_date(data_nascita, 'DD/MM/YYYY')
-                     ELSE NULL END {sort_order} NULLS LAST
-            """
-        else:
-            order_by_clause = f"ORDER BY {sort_by_col} {sort_order} NULLS LAST"
-
-        # LOGICA EFFICIENTE: 3. Paginazione
-        offset = (page - 1) * per_page
-        data_query = f"SELECT * FROM persone WHERE {sql_where_string} {order_by_clause} LIMIT %s OFFSET %s"
-        final_params = tuple(query_params) + (per_page, offset)
-        risultati = query_db(data_query, final_params)
-        
-        start_result = min(offset + 1, total_results)
-        end_result = min(offset + per_page, total_results)
-
-
-    return render_template(
-        "index.html",
-        risultati=risultati,
-        page=page,
-        total_pages=total_pages,
-        total_results=total_results,
-        search_params=search_params,
-        validation_error=validation_error,
-        total_record_count=total_record_count,
-        last_update_date=last_update_date,
-        start_result=start_result,
-        end_result=end_result,
-        alphabet=ALPHABET,
-        is_search_active=is_search_active
-    )
-
-# Questa parte serve solo per l'esecuzione locale.
-if __name__ == "__main__":
-    app.run(debug=True)
+C:\Users\Diego\Downloads\cerca_persone\cerca_persone>
