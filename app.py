@@ -216,32 +216,25 @@ def index():
 
     total_record_count = get_total_record_count()
     
+    # Logica resa più robusta per evitare crash
+    last_update_date = "N/D"
     try:
         conn = get_db_connection()
         with conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute("SELECT value FROM metadata WHERE key = 'last_update'")
-            record = cur.fetchone()
-            last_update_date = record['value'] if record else "N/D"
+            # Verifica prima che la tabella esista
+            cur.execute("SELECT to_regclass('public.metadata');")
+            table_exists = cur.fetchone()[0]
+            if table_exists:
+                cur.execute("SELECT value FROM metadata WHERE key = 'last_update'")
+                record = cur.fetchone()
+                if record:
+                    last_update_date = record['value']
+            else:
+                last_update_date = "Database non inizializzato"
         conn.close()
-    except psycopg2.errors.UndefinedTable:
-        last_update_date = "N/D (DB non inizializzato)"
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur:
-                cur.execute("""
-                CREATE TABLE IF NOT EXISTS metadata (
-                    key VARCHAR(50) PRIMARY KEY,
-                    value VARCHAR(255)
-                );
-                """)
-                cur.execute("INSERT INTO metadata (key, value) VALUES ('last_update', 'Nessun caricamento eseguito') ON CONFLICT (key) DO NOTHING;")
-            conn.commit()
-            conn.close()
-            last_update_date = 'Nessun caricamento eseguito'
-        except Exception:
-            pass
     except Exception:
-        last_update_date = "N/D"
+        # Se qualsiasi errore si verifica, la pagina si caricherà comunque
+        last_update_date = "Errore nel leggere la data"
 
 
     search_params = {
