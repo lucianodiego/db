@@ -1,388 +1,228 @@
-# -*- coding: utf-8 -*-
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataBase - Radici Genealogia</title>
+    <!-- Utilizzo Tailwind CSS per uno stile rapido e pulito -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .pagination a, .pagination span, .alphabox a { display: inline-flex; align-items: center; justify-content: center; padding: 8px; margin: 2px; border-radius: 8px; transition: background-color 0.3s, color 0.3s; border: 1px solid #e5e7eb; }
+        .pagination a, .alphabox a { background-color: #f9fafb; color: #1f2937; text-decoration: none; min-width: 36px; }
+        .pagination a:hover, .alphabox a:hover { background-color: #f3f4f6; }
+        .pagination .active, .alphabox .active { background-color: #3b82f6; color: white; font-weight: bold; border-color: #3b82f6; }
+        .pagination .disabled { color: #9ca3af; pointer-events: none; background-color: #f9fafb; }
+        .no-select { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+        th a { color: inherit; text-decoration: none; }
+        th a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 no-select">
 
-# Import delle librerie necessarie
-import os
-import psycopg2 # Libreria per connettersi a PostgreSQL
-from psycopg2.extras import DictCursor, execute_values
-import math
-from flask import Flask, request, render_template, flash, redirect, url_for
-from datetime import datetime
-import csv
-import io
-import sys
-import re # Importato per la gestione delle date
-
-# --- Configurazione Iniziale ---
-app = Flask(__name__)
-app.jinja_env.add_extension('jinja2.ext.do') 
-app.secret_key = os.environ.get('SECRET_KEY', 'un-segreto-molto-segreto-per-sviluppo-locale')
-
-
-DEFAULT_RESULTS_PER_PAGE = 20
-ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-# --- Funzioni Helper e Filtri Jinja ---
-
-def format_display_date(date_str):
-    """
-    Filtro per Jinja2: mostra 'Disponibile*' se la data contiene lettere.
-    """
-    if any(c.isalpha() for c in str(date_str)):
-        return "Disponibile*"
-    return date_str
-
-# Registra il filtro personalizzato per l'uso nei template
-app.jinja_env.filters['format_date'] = format_display_date
-
-
-# --- Funzioni di Connessione e Query per PostgreSQL ---
-def get_db_connection():
-    """Crea una connessione al database PostgreSQL su Render."""
-    conn_url = os.environ.get('DATABASE_URL')
-    if not conn_url:
-        raise RuntimeError("DATABASE_URL non è impostata. Assicurati di averla aggiunta su Render.")
-    
-    conn = psycopg2.connect(conn_url)
-    return conn
-
-def query_db(query, params=()):
-    """Esegue una query di selezione su PostgreSQL e restituisce tutti i risultati."""
-    conn = get_db_connection()
-    with conn.cursor(cursor_factory=DictCursor) as cursor:
-        cursor.execute(query, params)
-        results = cursor.fetchall()
-    conn.close()
-    return results
-
-def count_query_db(query, params=()):
-    """Esegue una query di conteggio su PostgreSQL."""
-    conn = get_db_connection()
-    with conn.cursor() as cursor:
-        cursor.execute(query, params)
-        count = cursor.fetchone()[0]
-    conn.close()
-    return count
-
-def get_total_record_count():
-    """Restituisce il numero totale di record nella tabella persone."""
-    try:
-        count = count_query_db("SELECT COUNT(*) FROM persone")
-    except psycopg2.Error:
-        count = 0
-    return count
-
-# --- ROTTA DI SETUP ---
-@app.route('/setup-database-online-super-segreto-12345')
-def setup_online_db():
-    """
-    Questa rotta SVUOTA la tabella e la ripopola con i dati di esempio.
-    """
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("DROP TABLE IF EXISTS persone;")
-            cur.execute("DROP TABLE IF EXISTS metadata;") # Svuota anche i metadati
+    <div class="container mx-auto p-4 md:p-8">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-7xl mx-auto">
+            <h1 class="text-3xl font-bold mb-2 text-center text-gray-700">DataBase - Radici Genealogia</h1>
             
-            # Ricrea la tabella persone
-            cur.execute("""
-            CREATE TABLE persone (
-                id SERIAL PRIMARY KEY,
-                cognome VARCHAR(255),
-                nome VARCHAR(255),
-                luogo_nascita VARCHAR(255),
-                data_nascita VARCHAR(20),
-                nome_padre VARCHAR(255),
-                nome_madre VARCHAR(255)
-            );
-            """)
+            <p class="text-center text-sm text-gray-500 mb-8">
+                Totale persone registrate: <strong>{{ total_record_count }}</strong> (aggiornato al {{ last_update_date }})
+            </p>
 
-            # Ricrea la tabella metadata per la data di aggiornamento
-            cur.execute("""
-            CREATE TABLE metadata (
-                key VARCHAR(50) PRIMARY KEY,
-                value VARCHAR(255)
-            );
-            """)
-            cur.execute("INSERT INTO metadata (key, value) VALUES ('last_update', 'Nessun caricamento eseguito');")
-            
-            persone_da_inserire = [
-                ('Rossi', 'Mario', 'Roma', '1990', 'Giuseppe', 'Maria'),
-                ('Bianchi', 'Luigi', 'Milano', '1988', 'Antonio', 'Anna'),
-                ('Verdi', 'Giulia', 'Napoli', '1992', 'Francesco', 'Laura'),
-                ('Russo', 'Paolo', 'Torino', '1990', 'Salvatore', 'Angela'),
-            ]
-            
-            execute_values(cur, 
-                "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
-                persone_da_inserire)
+            <!-- Modulo di Ricerca Multi-Campo -->
+            <form method="POST" action="/" class="mb-8 space-y-6">
+                
+                {% if validation_error %}
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative" role="alert">
+                        <strong class="font-bold">Errore:</strong>
+                        <span class="block sm:inline">{{ validation_error }}</span>
+                    </div>
+                {% endif %}
 
-        conn.commit()
-        conn.close()
-        
-        msg = "Setup completato! Il database è stato resettato e ripopolato con i dati di base."
-        return f"<h1>{msg}</h1>"
-    except Exception as e:
-        return f"<h1>Errore durante il setup!</h1><p>{e}</p>"
-
-
-# --- ROTTA PER CARICARE IL CSV ---
-@app.route('/upload', methods=['POST'])
-def upload_csv():
-    """Gestisce l'upload di un file CSV con un metodo di inserimento massivo (bulk insert)."""
-    if 'csv_file' not in request.files:
-        flash('Nessun file selezionato nel form.', 'warning')
-        return redirect(url_for('index'))
-    
-    file = request.files['csv_file']
-    
-    if file.filename == '':
-        flash('Nessun file selezionato.', 'warning')
-        return redirect(url_for('index'))
-        
-    if file and file.filename.endswith('.csv'):
-        csv.field_size_limit(512 * 1024)
-
-        file_bytes = file.stream.read()
-        decoded_content = None
-        try:
-            decoded_content = file_bytes.decode('utf-8')
-        except UnicodeDecodeError:
-            try:
-                decoded_content = file_bytes.decode('latin-1')
-            except UnicodeDecodeError:
-                flash("Impossibile decodificare il file. Prova a salvarlo con codifica UTF-8.", 'danger')
-                return redirect(url_for('index'))
-
-        try:
-            stream = io.StringIO(decoded_content)
-            
-            try:
-                dialect = csv.Sniffer().sniff(stream.read(2048))
-                stream.seek(0)
-            except csv.Error:
-                dialect = 'excel' # Fallback
-                dialect.delimiter = ';'
-                stream.seek(0)
-
-            csv_reader = csv.reader(stream, dialect)
-            
-            records_to_insert = []
-            skipped_count = 0
-            for row in csv_reader:
-                if not row: continue 
-                if len(row) == 6:
-                    records_to_insert.append(tuple(field.strip() for field in row))
-                else:
-                    skipped_count += 1
-            
-            if records_to_insert:
-                conn = get_db_connection()
-                with conn.cursor() as cur:
-                    cur.execute("TRUNCATE TABLE persone RESTART IDENTITY;")
+                <p class="text-sm text-gray-500">
+                    Inserisci almeno 3 caratteri nei campi di testo o un anno di 4 cifre.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8 border border-gray-200 p-6 rounded-lg">
                     
-                    execute_values(cur, 
-                        "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
-                        records_to_insert)
-                    
-                    now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-                    cur.execute("""
-                        INSERT INTO metadata (key, value) VALUES ('last_update', %s)
-                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-                    """, (now_str,))
+                    <!-- Campo Cognome -->
+                    <div class="space-y-2">
+                        <label for="cognome_testo" class="block text-sm font-medium text-gray-600">Cognome</label>
+                        <input type="text" name="cognome_testo" id="cognome_testo" value="{{ search_params.cognome_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="cognome_inizia" name="cognome_tipo" value="inizia" {% if search_params.cognome_tipo == 'inizia' or not search_params.cognome_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="cognome_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="cognome_esatto" name="cognome_tipo" value="esatto" {% if search_params.cognome_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="cognome_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="cognome_contiene" name="cognome_tipo" value="contiene" {% if search_params.cognome_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="cognome_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
 
-                conn.commit()
-                conn.close()
-                flash(f'Caricamento completato! Inseriti {len(records_to_insert)} nuovi record. Righe saltate: {skipped_count}.', 'success')
-            else:
-                flash(f'Nessun record valido trovato nel file CSV. Controlla che il file non sia vuoto e che le righe abbiano 6 colonne. Righe saltate: {skipped_count}.', 'warning')
+                    <!-- Campo Nome -->
+                    <div class="space-y-2">
+                        <label for="nome_testo" class="block text-sm font-medium text-gray-600">Nome</label>
+                        <input type="text" name="nome_testo" id="nome_testo" value="{{ search_params.nome_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="nome_inizia" name="nome_tipo" value="inizia" {% if search_params.nome_tipo == 'inizia' or not search_params.nome_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="nome_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="nome_esatto" name="nome_tipo" value="esatto" {% if search_params.nome_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="nome_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="nome_contiene" name="nome_tipo" value="contiene" {% if search_params.nome_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="nome_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
 
-        except Exception as e:
-            flash(f'Errore critico durante l\'elaborazione del file CSV: {e}', 'danger')
-        
-        return redirect(url_for('index'))
+                    <!-- Anno di Nascita -->
+                    <div class="space-y-2">
+                        <label for="data_nascita_anno" class="block text-sm font-medium text-gray-600">Anno di Nascita</label>
+                        <input type="text" name="data_nascita_anno" id="data_nascita_anno" value="{{ search_params.data_nascita_anno or '' }}" pattern="\d{4}" title="Inserisci un anno di 4 cifre" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                             <div class="flex items-center"><input type="radio" id="anno_esatto" name="data_nascita_tipo" value="anno_esatto" {% if search_params.data_nascita_tipo == 'anno_esatto' or not search_params.data_nascita_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="anno_esatto" class="ml-2 text-sm">Esatto</label></div>
+                             <div class="flex items-center"><input type="radio" id="pm_1" name="data_nascita_tipo" value="pm_1" {% if search_params.data_nascita_tipo == 'pm_1' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="pm_1" class="ml-2 text-sm">+/- 1</label></div>
+                             <div class="flex items-center"><input type="radio" id="pm_5" name="data_nascita_tipo" value="pm_5" {% if search_params.data_nascita_tipo == 'pm_5' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="pm_5" class="ml-2 text-sm">+/- 5</label></div>
+                        </fieldset>
+                    </div>
 
-    else:
-        flash('Formato file non valido. Si prega di caricare un file .csv.', 'danger')
-        return redirect(url_for('index'))
+                    <!-- Campo Nome Padre -->
+                    <div class="space-y-2">
+                        <label for="nome_padre_testo" class="block text-sm font-medium text-gray-600">Nome del Padre</label>
+                        <input type="text" name="nome_padre_testo" id="nome_padre_testo" value="{{ search_params.nome_padre_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="padre_inizia" name="nome_padre_tipo" value="inizia" {% if search_params.nome_padre_tipo == 'inizia' or not search_params.nome_padre_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="padre_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="padre_esatto" name="nome_padre_tipo" value="esatto" {% if search_params.nome_padre_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="padre_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="padre_contiene" name="nome_padre_tipo" value="contiene" {% if search_params.nome_padre_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="padre_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
 
+                    <!-- Campo Nome Madre -->
+                    <div class="space-y-2">
+                        <label for="nome_madre_testo" class="block text-sm font-medium text-gray-600">Nome della Madre</label>
+                        <input type="text" name="nome_madre_testo" id="nome_madre_testo" value="{{ search_params.nome_madre_testo or '' }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <fieldset class="flex items-center space-x-4 pt-1">
+                            <div class="flex items-center"><input type="radio" id="madre_inizia" name="nome_madre_tipo" value="inizia" {% if search_params.nome_madre_tipo == 'inizia' or not search_params.nome_madre_tipo %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="madre_inizia" class="ml-2 text-sm">Inizia</label></div>
+                            <div class="flex items-center"><input type="radio" id="madre_esatto" name="nome_madre_tipo" value="esatto" {% if search_params.nome_madre_tipo == 'esatto' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="madre_esatto" class="ml-2 text-sm">Esatto</label></div>
+                            <div class="flex items-center"><input type="radio" id="madre_contiene" name="nome_madre_tipo" value="contiene" {% if search_params.nome_madre_tipo == 'contiene' %}checked{% endif %} class="h-4 w-4 text-blue-600"><label for="madre_contiene" class="ml-2 text-sm">Contiene</label></div>
+                        </fieldset>
+                    </div>
+                </div>
 
-# --- ROTTA PRINCIPALE DELL'APPLICAZIONE ---
-@app.route("/", methods=["GET", "POST"])
-def index():
-    per_page = request.args.get("per_page", DEFAULT_RESULTS_PER_PAGE, type=int)
-    if per_page not in [10, 20, 50]:
-        per_page = DEFAULT_RESULTS_PER_PAGE
+                <div class="space-y-1 pt-4">
+                    <p class="text-xs text-gray-500">* "Disponibile" per Luogo di Nascita significa che è conosciuto il luogo o è accessibile e quindi da verificare;</p>
+                    <p class="text-xs text-gray-500">* "NN NN" può indicare che il dato è semplicemente Non Noto, mentre in alcuni casi si tratta di "Esposti"/"Orfani di genitore/i".</p>
+                </div>
 
-    page = request.args.get("page", 1, type=int)
-    risultati = []
-    total_pages = 0
-    total_results = 0
-    validation_error = None
-    start_result = 0
-    end_result = 0
-    is_search_active = False
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold p-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300">
+                    Cerca
+                </button>
+            </form>
 
-    total_record_count = get_total_record_count()
-    
-    try:
-        conn = get_db_connection()
-        with conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute("SELECT value FROM metadata WHERE key = 'last_update'")
-            record = cur.fetchone()
-            last_update_date = record['value'] if record else "N/D"
-        conn.close()
-    except psycopg2.errors.UndefinedTable:
-        last_update_date = "N/D (DB non inizializzato)"
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur:
-                cur.execute("""
-                CREATE TABLE metadata (
-                    key VARCHAR(50) PRIMARY KEY,
-                    value VARCHAR(255)
-                );
-                """)
-                cur.execute("INSERT INTO metadata (key, value) VALUES ('last_update', 'Nessun caricamento eseguito');")
-            conn.commit()
-            conn.close()
-            last_update_date = 'Nessun caricamento eseguito'
-        except Exception:
-            pass
-    except Exception:
-        last_update_date = "N/D"
+            <!-- Alphabox appare solo se c'è stata una ricerca -->
+            {% if is_search_active and not validation_error and total_results > 0 %}
+            <div class="alphabox mb-8 text-center p-4 border-t border-b border-gray-200">
+                <p class="text-sm font-semibold text-gray-600 mb-3">Filtra i risultati per iniziale del cognome:</p>
+                <div class="flex flex-wrap justify-center gap-1">
+                    {% for letter in alphabet %}
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, letter=letter) }}" class="px-2 py-1 {{ 'active' if search_params.letter == letter else '' }}">{{ letter }}</a>
+                    {% endfor %}
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page) }}" class="px-3 py-1">Tutti</a>
+                </div>
+            </div>
+            {% endif %}
 
+            <!-- Riepilogo Risultati -->
+            {% if is_search_active and not validation_error %}
+                <div class="text-center text-gray-600 mb-6 p-3">
+                    {% if total_results > 0 %}
+                        Trovati <strong>{{ total_results }}</strong> risultati.
+                    {% else %}
+                        Nessun risultato trovato per la tua ricerca.
+                    {% endif %}
+                </div>
+            {% endif %}
 
-    search_params = {
-        'cognome_testo': '', 'cognome_tipo': 'inizia',
-        'nome_testo': '', 'nome_tipo': 'inizia',
-        'data_nascita_anno': '', 'data_nascita_tipo': 'anno_esatto',
-        'nome_padre_testo': '', 'nome_padre_tipo': 'inizia',
-        'nome_madre_testo': '', 'nome_madre_tipo': 'inizia',
-        'sort_by': 'cognome',
-        'sort_order': 'asc',
-        'per_page': per_page,
-        'letter': ''
-    }
+            {% if risultati %}
+                <div class="overflow-x-auto border border-gray-200 rounded-lg" oncontextmenu="return false;">
+                    <table class="w-full table-auto bg-white">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                {% macro sort_link(column, title) %}
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, letter=search_params.letter, sort_by=column, sort_order='desc' if search_params.sort_by == column and search_params.sort_order == 'asc' else 'asc') }}" class="flex items-center">
+                                            {{ title }}
+                                            <span class="inline-block w-4 ml-1 text-center">
+                                                {% if search_params.sort_by == column %}{{ '▲' if search_params.sort_order == 'asc' else '▼' }}{% endif %}
+                                            </span>
+                                        </a>
+                                    </th>
+                                {% endmacro %}
+                                
+                                {{ sort_link('cognome', 'Cognome') }}
+                                {{ sort_link('nome', 'Nome') }}
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Luogo Nascita</th>
+                                {{ sort_link('data_nascita', 'Data Nascita') }}
+                                {{ sort_link('nome_padre', 'Padre') }}
+                                {{ sort_link('nome_madre', 'Madre') }}
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for persona in risultati %}
+                            <tr class="hover:bg-gray-50 transition-colors duration-200">
+                                <td class="px-6 py-4 text-sm text-gray-800 break-words">{{ persona.cognome }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-800 break-words">{{ persona.nome }}</td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">Disponibile*</td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">
+                                    {% if persona.data_nascita and (persona.data_nascita | string).replace('/', '').isdigit() %}
+                                        {{ persona.data_nascita }}
+                                    {% else %}
+                                        Disponibile*
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">
+                                    {% if persona.nome_padre == 'NN NN' %} NN NN*
+                                    {% elif persona.nome_padre == 'part.i' or persona.nome_padre == 'part.e' %} Disponibile*
+                                    {% else %} {{ persona.nome_padre }} {% endif %}
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500 break-words">
+                                    {% if persona.nome_madre == 'NN NN' %} NN NN*
+                                    {% elif persona.nome_madre == 'part.i' or persona.nome_madre == 'part.e' %} Disponibile*
+                                    {% else %} {{ persona.nome_madre }} {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
 
-    request_source = request.form if request.method == 'POST' else request.args
-    for key in search_params:
-        if key in request_source:
-            if key == 'per_page':
-                search_params[key] = int(request_source[key])
-            else:
-                search_params[key] = request_source[key]
+                <!-- Paginazione e Selettore Risultati -->
+                {% if total_results > 0 %}
+                <div class="mt-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-600 border-t pt-4 space-y-4 md:space-y-0">
+                    <div class="flex items-center space-x-2">
+                        <span class="font-semibold">Risultati per pagina:</span>
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, sort_by=search_params.sort_by, sort_order=search_params.sort_order, per_page=10, page=1) }}" class="px-3 py-1 rounded-md transition {{ 'bg-blue-600 text-white shadow' if search_params.per_page == 10 else 'bg-gray-200 hover:bg-gray-300' }}">10</a>
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, sort_by=search_params.sort_by, sort_order=search_params.sort_order, per_page=20, page=1) }}" class="px-3 py-1 rounded-md transition {{ 'bg-blue-600 text-white shadow' if search_params.per_page == 20 else 'bg-gray-200 hover:bg-gray-300' }}">20</a>
+                        <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, sort_by=search_params.sort_by, sort_order=search_params.sort_order, per_page=50, page=1) }}" class="px-3 py-1 rounded-md transition {{ 'bg-blue-600 text-white shadow' if search_params.per_page == 50 else 'bg-gray-200 hover:bg-gray-300' }}">50</a>
+                    </div>
+                    <div>
+                        <p>Pagina <strong>{{ page }}</strong> di <strong>{{ total_pages }}</strong> | Risultati {{ start_result }} - {{ end_result }} di {{ total_results }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                {% if total_pages > 1 %}
+                <nav class="pagination flex items-center justify-center flex-wrap mt-4" aria-label="Paginazione">
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=1) }}" class="{{ 'disabled' if page == 1 else '' }}">Inizio</a>
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=page-1) }}" class="{{ 'disabled' if page == 1 else '' }}">&laquo; Prec</a>
+                    {% set window = 2 %}
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == 1 or p == total_pages or (p >= page - window and p <= page + window) %}
+                            {% if loop.previtem is defined and p > loop.previtem + 1 %}
+                                <span class="disabled">...</span>
+                            {% endif %}
+                            <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=p) }}" class="{{ 'active' if p == page else '' }}">{{ p }}</a>
+                        {% endif %}
+                    {% endfor %}
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=page+1) }}" class="{{ 'disabled' if page == total_pages else '' }}">Succ &raquo;</a>
+                    <a href="{{ url_for('index', cognome_testo=search_params.cognome_testo, nome_testo=search_params.nome_testo, data_nascita_anno=search_params.data_nascita_anno, nome_padre_testo=search_params.nome_padre_testo, nome_madre_testo=search_params.nome_madre_testo, per_page=search_params.per_page, sort_by=search_params.sort_by, sort_order=search_params.sort_order, page=total_pages) }}" class="{{ 'disabled' if page == total_pages else '' }}">Fine</a>
+                </nav>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
 
-    if request.method == 'POST':
-        page = 1
-        search_params['letter'] = ''
-    
-    if request.args.get('letter'):
-        page = 1
-
-    where_clauses = []
-    query_params = []
-    
-    field_map = {
-        'cognome': ('cognome_testo', 'cognome_tipo'), 'nome': ('nome_testo', 'nome_tipo'),
-        'nome_padre': ('nome_padre_testo', 'nome_padre_tipo'), 'nome_madre': ('nome_madre_testo', 'nome_madre_tipo'),
-    }
-    active_fields = {}
-    for db_col, (testo_key, _) in field_map.items():
-        testo = search_params.get(testo_key, '').strip()
-        if testo: active_fields[db_col] = testo
-    
-    anno_nascita = search_params.get('data_nascita_anno', '').strip()
-    if anno_nascita: active_fields['data_nascita'] = anno_nascita
-
-    is_search_active = bool(active_fields) or bool(search_params.get('letter'))
-
-    if is_search_active:
-        invalid_fields = []
-        for label, text in active_fields.items():
-            if label != 'data_nascita' and len(text) < 3: invalid_fields.append(label)
-        if 'data_nascita' in active_fields and not (len(active_fields['data_nascita']) == 4 and active_fields['data_nascita'].isdigit()):
-            invalid_fields.append('data_nascita')
-
-        if invalid_fields:
-            field_labels = {'cognome': 'Cognome', 'nome': 'Nome', 'data_nascita': 'Anno di Nascita (deve essere di 4 cifre)', 'nome_padre': 'Nome del Padre', 'nome_madre': 'Nome della Madre'}
-            invalid_labels = [field_labels[key] for key in invalid_fields]
-            validation_error = f"I seguenti campi non sono validi: {', '.join(invalid_labels)}."
-        else:
-            for db_col, testo in active_fields.items():
-                if db_col == 'data_nascita': continue
-                _, tipo_key = field_map[db_col]
-                tipo = search_params.get(tipo_key, 'inizia')
-                if tipo == "esatto": filtro = testo
-                elif tipo == "inizia": filtro = f"{testo}%"
-                else: filtro = f"%{testo}%"
-                where_clauses.append(f"{db_col} ILIKE %s")
-                query_params.append(filtro)
-
-            if 'data_nascita' in active_fields:
-                anno = int(active_fields['data_nascita'])
-                tipo_anno = search_params.get('data_nascita_tipo', 'anno_esatto')
-                if tipo_anno == 'anno_esatto':
-                    where_clauses.append("data_nascita = %s")
-                    query_params.append(str(anno))
-                elif tipo_anno == 'pm_1':
-                    where_clauses.append("CAST(data_nascita AS INTEGER) BETWEEN %s AND %s")
-                    query_params.extend([anno - 1, anno + 1])
-                elif tipo_anno == 'pm_5':
-                    where_clauses.append("CAST(data_nascita AS INTEGER) BETWEEN %s AND %s")
-                    query_params.extend([anno - 5, anno + 5])
-            
-            if search_params['letter']:
-                where_clauses.append("cognome ILIKE %s")
-                query_params.append(f"{search_params['letter']}%")
-
-    if is_search_active and not validation_error and where_clauses:
-        sql_where_string = " AND ".join(where_clauses)
-        
-        # LOGICA EFFICIENTE: 1. Conteggio
-        count_query = f"SELECT COUNT(*) FROM persone WHERE {sql_where_string}"
-        total_results = count_query_db(count_query, tuple(query_params))
-        total_pages = math.ceil(total_results / per_page) if total_results > 0 else 0
-
-        # LOGICA EFFICIENTE: 2. Ordinamento
-        sort_by_col = search_params['sort_by']
-        sort_order = 'DESC' if search_params['sort_order'] == 'desc' else 'ASC'
-        
-        order_by_clause = ""
-        if sort_by_col == 'data_nascita':
-            order_by_clause = f"""ORDER BY
-                CASE WHEN data_nascita ~ '^[0-9]{{4}}$' THEN to_date(data_nascita, 'YYYY')
-                     WHEN data_nascita ~ '^[0-9]{{1,2}}/[0-9]{{1,2}}/[0-9]{{4}}$' THEN to_date(data_nascita, 'DD/MM/YYYY')
-                     ELSE NULL END {sort_order} NULLS LAST
-            """
-        else:
-            order_by_clause = f"ORDER BY {sort_by_col} {sort_order} NULLS LAST"
-
-        # LOGICA EFFICIENTE: 3. Paginazione
-        offset = (page - 1) * per_page
-        data_query = f"SELECT * FROM persone WHERE {sql_where_string} {order_by_clause} LIMIT %s OFFSET %s"
-        final_params = tuple(query_params) + (per_page, offset)
-        risultati = query_db(data_query, final_params)
-        
-        start_result = min(offset + 1, total_results)
-        end_result = min(offset + per_page, total_results)
-
-
-    return render_template(
-        "index.html",
-        risultati=risultati,
-        page=page,
-        total_pages=total_pages,
-        total_results=total_results,
-        search_params=search_params,
-        validation_error=validation_error,
-        total_record_count=total_record_count,
-        last_update_date=last_update_date,
-        start_result=start_result,
-        end_result=end_result,
-        alphabet=ALPHABET,
-        is_search_active=is_search_active
-    )
-
-# Questa parte serve solo per l'esecuzione locale.
-if __name__ == "__main__":
-    app.run(debug=True)
+</body>
+</html>
