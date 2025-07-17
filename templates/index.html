@@ -9,9 +9,13 @@
         .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #2c3e50; }
         form { margin-bottom: 20px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; }
-        .form-group { margin-bottom: 15px; }
-        label { font-weight: bold; margin-right: 10px; }
-        input[type="text"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-weight: bold; margin-bottom: 5px; }
+        .form-group input[type="text"], .form-group input[type="number"] { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; width: 100%; box-sizing: border-box; }
+        .radio-group { display: flex; gap: 15px; margin-top: 10px; }
+        .radio-group label { font-weight: normal; }
+        .button-group { grid-column: 1 / -1; display: flex; justify-content: flex-start; gap: 10px; margin-top: 20px; }
         button { padding: 10px 20px; border: none; border-radius: 4px; background-color: #3498db; color: white; font-size: 1rem; cursor: pointer; }
         button:hover { background-color: #2980b9; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -26,18 +30,63 @@
     <div class="container">
         <h1>Ricerca Anagrafica</h1>
 
-        <!-- Form di Ricerca Semplice -->
+        <!-- Form di Ricerca Completo -->
         <form method="post">
-            <div class="form-group">
-                <label for="cognome_testo">Cognome:</label>
-                <input type="text" name="cognome_testo" id="cognome_testo" value="{{ search_params.cognome_testo }}">
+            <div class="form-grid">
+                <!-- Cognome -->
+                <div class="form-group">
+                    <label for="cognome_testo">Cognome</label>
+                    <input type="text" name="cognome_testo" id="cognome_testo" value="{{ search_params.cognome_testo }}">
+                    <div class="radio-group">
+                        <label><input type="radio" name="cognome_tipo" value="inizia" {% if search_params.cognome_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
+                        <label><input type="radio" name="cognome_tipo" value="contiene" {% if search_params.cognome_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
+                        <label><input type="radio" name="cognome_tipo" value="esatto" {% if search_params.cognome_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
+                    </div>
+                </div>
+                <!-- Nome -->
+                <div class="form-group">
+                    <label for="nome_testo">Nome</label>
+                    <input type="text" name="nome_testo" id="nome_testo" value="{{ search_params.nome_testo }}">
+                    <div class="radio-group">
+                        <label><input type="radio" name="nome_tipo" value="inizia" {% if search_params.nome_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
+                        <label><input type="radio" name="nome_tipo" value="contiene" {% if search_params.nome_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
+                        <label><input type="radio" name="nome_tipo" value="esatto" {% if search_params.nome_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
+                    </div>
+                </div>
+                <!-- Anno di Nascita -->
+                <div class="form-group">
+                    <label for="data_nascita_anno">Anno di Nascita</label>
+                    <input type="number" name="data_nascita_anno" id="data_nascita_anno" value="{{ search_params.data_nascita_anno }}" placeholder="Es: 1990">
+                     <div class="radio-group">
+                        <label><input type="radio" name="data_nascita_tipo" value="anno_esatto" {% if search_params.data_nascita_tipo == 'anno_esatto' %}checked{% endif %}> Esatto</label>
+                        <label><input type="radio" name="data_nascita_tipo" value="pm_1" {% if search_params.data_nascita_tipo == 'pm_1' %}checked{% endif %}> +/- 1 anno</label>
+                        <label><input type="radio" name="data_nascita_tipo" value="pm_5" {% if search_params.data_nascita_tipo == 'pm_5' %}checked{% endif %}> +/- 5 anni</label>
+                    </div>
+                </div>
+                <!-- Nome del Padre -->
+                 <div class="form-group">
+                    <label for="nome_padre_testo">Nome del Padre</label>
+                    <input type="text" name="nome_padre_testo" id="nome_padre_testo" value="{{ search_params.nome_padre_testo }}">
+                    <div class="radio-group">
+                        <label><input type="radio" name="nome_padre_tipo" value="inizia" {% if search_params.nome_padre_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
+                        <label><input type="radio" name="nome_padre_tipo" value="contiene" {% if search_params.nome_padre_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
+                        <label><input type="radio" name="nome_padre_tipo" value="esatto" {% if search_params.nome_padre_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
+                    </div>
+                </div>
+                <!-- Nome della Madre -->
+                <div class="form-group">
+                    <label for="nome_madre_testo">Nome della Madre</label>
+                    <input type="text" name="nome_madre_testo" id="nome_madre_testo" value="{{ search_params.nome_madre_testo }}">
+                    <div class="radio-group">
+                        <label><input type="radio" name="nome_madre_tipo" value="inizia" {% if search_params.nome_madre_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
+                        <label><input type="radio" name="nome_madre_tipo" value="contiene" {% if search_params.nome_madre_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
+                        <label><input type="radio" name="nome_madre_tipo" value="esatto" {% if search_params.nome_madre_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label><input type="radio" name="cognome_tipo" value="inizia" {% if search_params.cognome_tipo == 'inizia' %}checked{% endif %}> Inizia con</label>
-                <label><input type="radio" name="cognome_tipo" value="contiene" {% if search_params.cognome_tipo == 'contiene' %}checked{% endif %}> Contiene</label>
-                <label><input type="radio" name="cognome_tipo" value="esatto" {% if search_params.cognome_tipo == 'esatto' %}checked{% endif %}> Esatto</label>
+            <div class="button-group">
+                <button type="submit">Cerca</button>
             </div>
-            <button type="submit">Cerca</button>
         </form>
 
         <!-- Risultati della Ricerca -->
@@ -62,7 +111,7 @@
                         <tr>
                             <td>{{ persona.cognome }}</td>
                             <td>{{ persona.nome }}</td>
-                            <td>{{ persona.luogo_nascita }}</td>
+                            <td>Disponibile*</td>
                             <td>{{ persona.data_nascita }}</td>
                             <td>{{ persona.nome_padre }}</td>
                             <td>{{ persona.nome_madre }}</td>
