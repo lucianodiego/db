@@ -3,13 +3,13 @@
 # Import delle librerie necessarie
 import os
 import psycopg2 # Libreria per connettersi a PostgreSQL
-from psycopg2.extras import DictCursor, execute_values # <-- Importato execute_values per l'inserimento massivo
+from psycopg2.extras import DictCursor, execute_values
 import math
 from flask import Flask, request, render_template, flash, redirect, url_for
 from datetime import datetime
 import csv
 import io
-import sys # Importato per gestire il limite del campo CSV
+import sys
 
 # --- Configurazione Iniziale ---
 app = Flask(__name__)
@@ -61,15 +61,14 @@ def get_total_record_count():
 def setup_online_db():
     """
     Questa rotta SVUOTA la tabella e la ripopola con i dati di esempio.
-    Utile per ripartire da una situazione pulita.
     """
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # Svuota completamente la tabella prima di ogni setup
             cur.execute("DROP TABLE IF EXISTS persone;")
+            cur.execute("DROP TABLE IF EXISTS metadata;") # Svuota anche i metadati
             
-            # Ricrea la tabella con la struttura corretta
+            # Ricrea la tabella persone
             cur.execute("""
             CREATE TABLE persone (
                 id SERIAL PRIMARY KEY,
@@ -81,6 +80,15 @@ def setup_online_db():
                 nome_madre VARCHAR(255)
             );
             """)
+
+            # Ricrea la tabella metadata per la data di aggiornamento
+            cur.execute("""
+            CREATE TABLE metadata (
+                key VARCHAR(50) PRIMARY KEY,
+                value VARCHAR(255)
+            );
+            """)
+            cur.execute("INSERT INTO metadata (key, value) VALUES ('last_update', 'Nessun caricamento eseguito');")
             
             persone_da_inserire = [
                 ('Rossi', 'Mario', 'Roma', '1990', 'Giuseppe', 'Maria'),
@@ -89,7 +97,6 @@ def setup_online_db():
                 ('Russo', 'Paolo', 'Torino', '1990', 'Salvatore', 'Angela'),
             ]
             
-            # Usa execute_values per un inserimento efficiente dei dati di esempio
             execute_values(cur, 
                 "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
                 persone_da_inserire)
@@ -97,35 +104,13 @@ def setup_online_db():
         conn.commit()
         conn.close()
         
-        msg = "Setup completato! La tabella è stata svuotata e ripopolata con i dati di base."
+        msg = "Setup completato! Il database è stato resettato e ripopolato con i dati di base."
         return f"<h1>{msg}</h1>"
     except Exception as e:
         return f"<h1>Errore durante il setup!</h1><p>{e}</p>"
 
-# --- ROTTA DI DEBUG (invariata) ---
-@app.route('/debug-db')
-def debug_db():
-    try:
-        conn = get_db_connection()
-        with conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute("SELECT * FROM persone LIMIT 10;")
-            records = cur.fetchall()
-        conn.close()
 
-        if not records:
-            return "<h3>Diagnosi Database:</h3><p>La tabella 'persone' esiste ma è VUOTA.</p>"
-
-        response_html = "<h3>Diagnosi Database:</h3><ul>"
-        for record in records:
-            response_html += f"<li>{dict(record)}</li>"
-        response_html += "</ul>"
-        return response_html
-
-    except Exception as e:
-        return f"<h1>Errore durante la diagnosi!</h1><p>{e}</p>"
-
-
-# --- ROTTA PER CARICARE IL CSV (OTTIMIZZATA E PIÙ ROBUSTA) ---
+# --- ROTTA PER CARICARE IL CSV ---
 @app.route('/upload', methods=['POST'])
 def upload_csv():
     """Gestisce l'upload di un file CSV con un metodo di inserimento massivo (bulk insert)."""
@@ -156,18 +141,14 @@ def upload_csv():
         try:
             stream = io.StringIO(decoded_content)
             
-            # NUOVA LOGICA: Rileva automaticamente il delimitatore (virgola o punto e virgola)
-            # Legge un campione del file per determinare il formato
             try:
                 dialect = csv.Sniffer().sniff(stream.read(2048))
-                stream.seek(0)  # Torna all'inizio del file dopo aver "annusato"
+                stream.seek(0)
             except csv.Error:
-                # Se lo sniffer fallisce (es. file con una sola colonna), usa il punto e virgola di default
-                dialect = 'excel' # 'excel' usa la virgola, ma lo sovrascriviamo
+                dialect = 'excel'
                 dialect.delimiter = ';'
                 stream.seek(0)
 
-            # Usa il "dialetto" rilevato per leggere il file correttamente
             csv_reader = csv.reader(stream, dialect)
             
             records_to_insert = []
@@ -182,14 +163,26 @@ def upload_csv():
             if records_to_insert:
                 conn = get_db_connection()
                 with conn.cursor() as cur:
+                    # Svuota la tabella prima di un nuovo caricamento massivo
+                    cur.execute("TRUNCATE TABLE persone RESTART IDENTITY;")
+                    
+                    # Inserisce i nuovi dati
                     execute_values(cur, 
                         "INSERT INTO persone (cognome, nome, luogo_nascita, data_nascita, nome_padre, nome_madre) VALUES %s",
                         records_to_insert)
+                    
+                    # Aggiorna la data dell'ultimo caricamento
+                    now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                    cur.execute("""
+                        INSERT INTO metadata (key, value) VALUES ('last_update', %s)
+                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+                    """, (now_str,))
+
                 conn.commit()
                 conn.close()
-                flash(f'Caricamento completato! Record inseriti: {len(records_to_insert)}. Righe saltate (malformate): {skipped_count}.', 'success')
+                flash(f'Caricamento completato! Inseriti {len(records_to_insert)} nuovi record. Righe saltate: {skipped_count}.', 'success')
             else:
-                flash(f'Nessun record valido trovato nel file CSV. Controlla che il file non sia vuoto e che le righe abbiano 6 colonne separate da virgola o punto e virgola. Righe saltate: {skipped_count}.', 'warning')
+                flash(f'Nessun record valido trovato nel file CSV. Controlla che il file non sia vuoto e che le righe abbiano 6 colonne. Righe saltate: {skipped_count}.', 'warning')
 
         except Exception as e:
             flash(f'Errore critico durante l\'elaborazione del file CSV: {e}', 'danger')
@@ -201,10 +194,9 @@ def upload_csv():
         return redirect(url_for('index'))
 
 
-# --- ROTTA PRINCIPALE DELL'APPLICAZIONE (invariata) ---
+# --- ROTTA PRINCIPALE DELL'APPLICAZIONE ---
 @app.route("/", methods=["GET", "POST"])
 def index():
-    # ... (tutto il resto del codice della funzione index rimane identico)
     per_page = request.args.get("per_page", DEFAULT_RESULTS_PER_PAGE, type=int)
     if per_page not in [10, 20, 50]:
         per_page = DEFAULT_RESULTS_PER_PAGE
@@ -219,7 +211,18 @@ def index():
     is_search_active = False
 
     total_record_count = get_total_record_count()
-    last_update_date = "N/D"
+    
+    # Recupera la data di ultimo aggiornamento dal database
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT value FROM metadata WHERE key = 'last_update'")
+            record = cur.fetchone()
+            last_update_date = record['value'] if record else "N/D"
+        conn.close()
+    except Exception:
+        last_update_date = "N/D"
+
 
     search_params = {
         'cognome_testo': '', 'cognome_tipo': 'inizia',
