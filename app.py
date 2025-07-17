@@ -152,8 +152,23 @@ def upload_csv():
         return redirect(url_for('index'))
         
     if file and file.filename.endswith('.csv'):
+        # CORREZIONE: Legge il file in byte e prova diverse codifiche
+        file_bytes = file.stream.read()
+        decoded_content = None
         try:
-            stream = io.StringIO(file.stream.read().decode("UTF-8"), newline=None)
+            # Prova prima con UTF-8, la codifica standard
+            decoded_content = file_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                # Se fallisce, prova con latin-1, comune in Europa/Italia
+                decoded_content = file_bytes.decode('latin-1')
+                flash('File decodificato con la codifica alternativa (latin-1).', 'info')
+            except UnicodeDecodeError:
+                flash("Impossibile decodificare il file. Prova a salvarlo con codifica UTF-8.", 'danger')
+                return redirect(url_for('index'))
+
+        try:
+            stream = io.StringIO(decoded_content, newline=None)
             csv_reader = csv.reader(stream)
             
             conn = get_db_connection()
@@ -184,7 +199,7 @@ def upload_csv():
             conn.close()
             flash(f'Caricamento completato! Record inseriti: {inserted_count}. Record saltati (duplicati o malformati): {skipped_count}.', 'success')
         except Exception as e:
-            flash(f'Errore critico durante il caricamento del file CSV: {e}', 'danger')
+            flash(f'Errore critico durante l\'elaborazione del file CSV: {e}', 'danger')
         
         return redirect(url_for('index'))
 
