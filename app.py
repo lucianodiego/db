@@ -21,7 +21,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'un-segreto-molto-segreto-per-svil
 DEFAULT_RESULTS_PER_PAGE = 20
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-# --- Funzioni di Connessione e Query per PostgreSQL (invariate) ---
+# --- Funzioni di Connessione e Query per PostgreSQL ---
 def get_db_connection():
     """Crea una connessione al database PostgreSQL su Render."""
     conn_url = os.environ.get('DATABASE_URL')
@@ -57,7 +57,7 @@ def get_total_record_count():
         count = 0
     return count
 
-# --- ROTTA DI SETUP (invariata) ---
+# --- ROTTA DI SETUP ---
 @app.route('/setup-database-online-super-segreto-12345')
 def setup_online_db():
     """
@@ -114,11 +114,28 @@ def setup_online_db():
     except Exception as e:
         return f"<h1>Errore durante il setup!</h1><p>{e}</p>"
 
-# --- ROTTA DI DEBUG (invariata) ---
+# --- ROTTA DI DEBUG ---
 @app.route('/debug-db')
 def debug_db():
-    # ... (codice invariato)
-    pass
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT * FROM persone LIMIT 10;")
+            records = cur.fetchall()
+        conn.close()
+
+        if not records:
+            return "<h3>Diagnosi Database:</h3><p>La tabella 'persone' esiste ma è VUOTA.</p>"
+
+        response_html = "<h3>Diagnosi Database:</h3><ul>"
+        for record in records:
+            response_html += f"<li>{dict(record)}</li>"
+        response_html += "</ul>"
+        return response_html
+
+    except Exception as e:
+        return f"<h1>Errore durante la diagnosi!</h1><p>{e}</p>"
+
 
 # --- NUOVA ROTTA PER CARICARE IL CSV ---
 @app.route('/upload', methods=['POST'])
@@ -136,7 +153,6 @@ def upload_csv():
         
     if file and file.filename.endswith('.csv'):
         try:
-            # Legge il file in memoria come testo, decodificandolo in UTF-8
             stream = io.StringIO(file.stream.read().decode("UTF-8"), newline=None)
             csv_reader = csv.reader(stream)
             
@@ -145,7 +161,7 @@ def upload_csv():
                 inserted_count = 0
                 skipped_count = 0
                 for row in csv_reader:
-                    if not row: continue # Salta righe vuote
+                    if not row: continue 
                     if len(row) != 6:
                         skipped_count += 1
                         continue 
@@ -177,10 +193,9 @@ def upload_csv():
         return redirect(url_for('index'))
 
 
-# --- ROTTA PRINCIPALE DELL'APPLICAZIONE (invariata) ---
+# --- ROTTA PRINCIPALE DELL'APPLICAZIONE ---
 @app.route("/", methods=["GET", "POST"])
 def index():
-    # ... (tutto il resto del codice della funzione index rimane identico)
     per_page = request.args.get("per_page", DEFAULT_RESULTS_PER_PAGE, type=int)
     if per_page not in [10, 20, 50]:
         per_page = DEFAULT_RESULTS_PER_PAGE
@@ -296,4 +311,27 @@ def index():
             sort_by_col, sort_order = 'cognome', 'ASC'
         order_by_clause = f"ORDER BY {sort_by_col} {sort_order}"
 
-        data_query = f"SELECT * FROM persone WHERE {sql_where_string
+        # Qui c'era l'errore. Questa è la riga corretta.
+        data_query = f"SELECT * FROM persone WHERE {sql_where_string} {order_by_clause} LIMIT %s OFFSET %s"
+        final_params = tuple(query_params) + (per_page, offset)
+        risultati = query_db(data_query, final_params)
+
+    return render_template(
+        "index.html",
+        risultati=risultati,
+        page=page,
+        total_pages=total_pages,
+        total_results=total_results,
+        search_params=search_params,
+        validation_error=validation_error,
+        total_record_count=total_record_count,
+        last_update_date=last_update_date,
+        start_result=start_result,
+        end_result=end_result,
+        alphabet=ALPHABET,
+        is_search_active=is_search_active
+    )
+
+# Questa parte serve solo per l'esecuzione locale.
+if __name__ == "__main__":
+    app.run(debug=True)
