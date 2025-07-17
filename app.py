@@ -338,12 +338,14 @@ def index():
         
         order_by_clause = ""
         if sort_by_col == 'data_nascita':
+            # Logica di ordinamento avanzata per le date, gestita da PostgreSQL
             order_by_clause = f"""ORDER BY
                 CASE WHEN data_nascita ~ '^[0-9]{{4}}$' THEN to_date(data_nascita, 'YYYY')
                      WHEN data_nascita ~ '^[0-9]{{1,2}}/[0-9]{{1,2}}/[0-9]{{4}}$' THEN to_date(data_nascita, 'DD/MM/YYYY')
                      ELSE NULL END {sort_order} NULLS LAST
             """
         else:
+            # Ordinamento standard per le altre colonne
             order_by_clause = f"ORDER BY {sort_by_col} {sort_order} NULLS LAST"
 
         # LOGICA EFFICIENTE: 3. Paginazione
