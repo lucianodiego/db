@@ -38,6 +38,33 @@ def get_db_connection():
     conn = psycopg2.connect(conn_url)
     return conn
 
+# --- Funzioni di Interrogazione Database ---
+def query_db(query, params=None):
+    """Esegue una query che restituisce righe e le ritorna come lista di dizionari."""
+    conn = get_db_connection()
+    with conn.cursor(cursor_factory=DictCursor) as cur:
+        cur.execute(query, params)
+        results = cur.fetchall()
+    conn.close()
+    return results
+
+def count_query_db(query, params=None):
+    """Esegue una query che restituisce un conteggio (un singolo valore)."""
+    conn = get_db_connection()
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        count = cur.fetchone()[0]
+    conn.close()
+    return count
+
+def get_total_record_count():
+    """Ottiene il numero totale di record nella tabella 'persone'."""
+    try:
+        return count_query_db("SELECT COUNT(*) FROM persone")
+    except Exception:
+        # Se la tabella non esiste o c'è un altro errore, ritorna 0
+        return 0
+        
 # --- Rotte dell'Applicazione ---
 
 @app.route('/setup-database-online-super-segreto-12345')
