@@ -1,9 +1,0 @@
-# Ignora i file di database
-*.db
-*.sqlite3
-
-# Ignora i file CSV
-*.csv
-
-# Ignora le cartelle di cache di Python
-__pycache__/
